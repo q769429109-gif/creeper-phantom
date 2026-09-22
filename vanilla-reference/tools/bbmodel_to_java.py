@@ -506,7 +506,7 @@ def f(v):
 def emit_java(parts, bb, class_name, model_layer, entity_class, tex_w, tex_h):
     L = []
     a = L.append
-    a("package com.phantomblast.client.model;")
+    a("package com.hybridcreeper.client.model;")
     a("")
     a("import net.minecraft.client.model.HierarchicalModel;")
     a("import net.minecraft.client.model.geom.ModelPart;")
@@ -520,7 +520,7 @@ def emit_java(parts, bb, class_name, model_layer, entity_class, tex_w, tex_h):
     a("import net.minecraft.world.entity.monster.Phantom;")
     a("")
     a("/**")
-    a(" * 幻翼爆破自定义模型（自动生成，请勿手改 —— 改模型请改 .bbmodel 后重跑生成器）。")
+    a(" * 杂交苦力怕自定义模型（自动生成，请勿手改 —— 改模型请改 .bbmodel 后重跑生成器）。")
     a(" *")
     a(" * <p>由 Blockbench 工程 {@code phantomcreeper.bbmodel} 反向换算而来，")
     a(" * 纹理尺寸 %d × %d。</p>" % (tex_w, tex_h))
@@ -698,8 +698,8 @@ def main():
     B.save_png(os.path.join(OUT, "check_phantomcreeper_tex.png"), w, h, c)
     print("已输出结构图 / 贴图渲染图")
 
-    java = emit_java(parts, bb, "PhantomBlastModel", "PHANTOM_BLAST", "Phantom", tw, th)
-    out_java = os.path.join(OUT, "PhantomBlastModel.java.txt")
+    java = emit_java(parts, bb, "HybridCreeperModel", "HYBRID_CREEPER", "Phantom", tw, th)
+    out_java = os.path.join(OUT, "HybridCreeperModel.java.txt")
     with open(out_java, "w", encoding="utf-8") as fp:
         fp.write(java)
     print("Java 源码草稿:", out_java)

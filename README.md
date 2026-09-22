@@ -1,4 +1,4 @@
-# 幻翼爆破 Phantom Blast
+# 杂交苦力怕 Hybrid Creeper
 
 > Minecraft **1.21.1** · **NeoForge** · MIT · v1.1.1
 
@@ -20,10 +20,10 @@
 | 多人服务器 | **客户端也必须安装**（见[注意事项](#注意事项)） |
 
 1. 装好 NeoForge 1.21.1 的客户端 / 服务端；
-2. 把 `phantomblast-1.1.1.jar` 放进 `mods/` 文件夹；
+2. 把 `hybridcreeper-1.1.1.jar` 放进 `mods/` 文件夹；
 3. 启动游戏。
 
-首次进入世界后会自动生成配置文件 `config/phantomblast-common.toml`。
+首次进入世界后会自动生成配置文件 `config/hybridcreeper-common.toml`。
 
 > **卸载**：删掉 jar 就行，原版内容没有任何痕迹。地图里已经刷出来的两只生物会变成「未知实体」并消失，属正常现象。
 
@@ -31,7 +31,7 @@
 
 ## 生物一 · 苦力怕幻翼
 
-> `phantomblast:creeperphantom` ・ Blast Phantom
+> `hybridcreeper:creeperphantom` ・ Creeper Phantom
 
 一只**会俯冲自爆**的幻翼。
 
@@ -55,7 +55,7 @@
 ### 怎么把它叫出来
 
 ```
-/summon phantomblast:creeperphantom ~ ~10 ~
+/summon hybridcreeper:creeperphantom ~ ~10 ~
 ```
 
 创造模式的「刷怪蛋」标签页里也有 **苦力怕幻翼刷怪蛋**。
@@ -66,7 +66,7 @@
 
 ## 生物二 · 水下苦力怕
 
-> `phantomblast:water_creeper` ・ Water Creeper
+> `hybridcreeper:water_creeper` ・ Water Creeper
 
 一只专门在水里猎杀玩家的生物。
 
@@ -85,7 +85,7 @@
 ### 怎么把它叫出来
 
 ```
-/summon phantomblast:water_creeper ~ ~ ~
+/summon hybridcreeper:water_creeper ~ ~ ~
 ```
 
 创造模式的「刷怪蛋」标签页里也有 **水下苦力怕刷怪蛋**。
@@ -96,7 +96,7 @@
 
 ## 配置
 
-文件：`config/phantomblast-common.toml`，首次启动游戏时自动生成。
+文件：`config/hybridcreeper-common.toml`，首次启动游戏时自动生成。
 
 ### 常用改法
 

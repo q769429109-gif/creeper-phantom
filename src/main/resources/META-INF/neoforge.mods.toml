@@ -7,7 +7,7 @@ modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
-description = '''苦力怕幻翼俯冲击中玩家时，在命中点引爆一个苦力怕等级的爆炸（威力 3.0，可配置）。'''
+description = '''新增两只爆炸系敌对生物：苦力怕幻翼（俯冲击中玩家即在命中点引爆苦力怕级爆炸）与水下苦力怕（高速撞船、贴身自爆、上岸突袭）。所有参数可配置。'''
 
 [[dependencies.${mod_id}]]
 modId = "neoforge"
