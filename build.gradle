@@ -1,0 +1,75 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version "${modDevGradleVersion}"
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+neoForge {
+    version = project.neo_version
+
+    // 显式声明模组来源。ModDevGradle 2.x 不再无条件把 sourceSets.main 当成模组 ——
+    // 少了这一块，游戏能读到 neoforge.mods.toml（所以模组列表里能看到名字），
+    // 但 @Mod 类不会被扫描到，构造函数因此永远不会执行。表现就是
+    // 「实体没注册 / 配置文件不生成 / 数据包标签指向不存在的实体 / biome modifier 解析失败」。
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    // Gradle 默认用平台编码（中文 Windows 上是 GBK）读 .java，
+    // 会把源码里的中文字符串字面量编译成乱码，必须显式指定 UTF-8。
+    options.encoding = 'UTF-8'
+
+    // 把「用了过时 API」的具体位置打出来。
+    // 默认 javac 只给一句"使用或覆盖了已过时的 API"，不说是哪一行 —— 找起来很费劲。
+    options.compilerArgs << '-Xlint:deprecation'
+}
+
+tasks.withType(ProcessResources).configureEach {
+    // 同理：expand() 替换 neoforge.mods.toml / pack.mcmeta 时也走这个编码，
+    // 不设的话中文 mod_description 会变成 "å¹»ç¿¼..." 这种乱码。
+    filteringCharset = 'UTF-8'
+
+    var replaceProperties = [
+            minecraft_version       : minecraft_version,
+            minecraft_version_range : '[1.21.1,1.21.2)',
+            neo_version             : neo_version,
+            neo_version_range       : '[21.1.0,)',
+            loader_version_range    : '[4,)',
+            mod_id                  : mod_id,
+            mod_name                : mod_name,
+            mod_license             : mod_license,
+            mod_version             : mod_version,
+            mod_authors             : mod_authors,
+            mod_description         : mod_description
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
