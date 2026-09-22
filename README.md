@@ -170,4 +170,6 @@
 
 ## 许可证
 
-**MIT**
+**MIT** —— 全文见 [LICENSE](LICENSE)。
+
+完整改动记录见 [CHANGELOG.md](CHANGELOG.md)；各版本的下载见 [Releases](https://github.com/q769429109-gif/creeper-phantom/releases)。
