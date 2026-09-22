@@ -1,0 +1,32 @@
+# ============================================================
+#  行尾约定
+# ============================================================
+#  背景：Windows 上安装的 Git 通常带 core.autocrlf=true。
+#        若不显式约定行尾，clone 到 Linux / macOS / CI 之后
+#        gradlew 会带着 CRLF，执行时报：
+#          bad interpreter: No such file or directory
+#        显式写死可以彻底避免这个「本机能跑、别人跑不了」的问题。
+# ============================================================
+
+# ---------- Gradle 启动脚本 ----------
+# shell 版必须 LF；Windows 批处理必须 CRLF
+gradlew           text eol=lf
+gradlew.bat       text eol=crlf
+
+# ---------- 源码 / 配置 / 文档：统一 LF ----------
+*.java            text eol=lf
+*.gradle          text eol=lf
+*.properties      text eol=lf
+*.json            text eol=lf
+*.mcmeta          text eol=lf
+*.toml            text eol=lf
+*.md              text eol=lf
+*.py              text eol=lf
+*.bbmodel         text eol=lf
+.gitignore        text eol=lf
+.gitattributes    text eol=lf
+
+# ---------- 二进制：禁止任何换行转换 ----------
+*.jar             binary
+*.png             binary
+*.ogg             binary
