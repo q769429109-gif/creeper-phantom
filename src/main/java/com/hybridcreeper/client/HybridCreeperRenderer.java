@@ -27,6 +27,10 @@ import net.minecraft.resources.ResourceLocation;
  * 那层 UV 是按<b>原版幻翼的头</b>排布的，而我们的头换成了苦力怕头（UV 偏移 32,38），
  * 直接照搬会在莫名其妙的位置冒出 4 个绿点，所以这里<b>不挂</b>眼睛层。
  * 新贴图里苦力怕脸本身就有眼睛。</p>
+ *
+ * <h2>充能层</h2>
+ * <p>挂了一个 {@link PoweredOverlayLayer}：被闪电劈中后，整只裹上一层滚动的蓝色能量。
+ * 那一层不依赖模型变形，对任何模型都通用 —— 原因见该类的注释。</p>
  */
 public class HybridCreeperRenderer extends MobRenderer<HybridCreeperEntity, HybridCreeperModel> {
 
@@ -37,6 +41,9 @@ public class HybridCreeperRenderer extends MobRenderer<HybridCreeperEntity, Hybr
     public HybridCreeperRenderer(EntityRendererProvider.Context context) {
         // 阴影半径 0.75 —— 与原版幻翼一致
         super(context, new HybridCreeperModel(context.bakeLayer(HybridCreeperModel.LAYER)), 0.75F);
+
+        // 被闪电劈中后的蓝色能量外衣。加在最后，画在最上层。
+        this.addLayer(new PoweredOverlayLayer<>(this));
     }
 
     @Override

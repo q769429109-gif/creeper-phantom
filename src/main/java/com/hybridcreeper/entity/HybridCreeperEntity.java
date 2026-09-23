@@ -1,7 +1,13 @@
 package com.hybridcreeper.entity;
 
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.monster.Phantom;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -39,7 +45,21 @@ import net.minecraft.world.level.storage.loot.LootTable;
  * <p>除此之外——属性、生命、伤害、掉落、音效、粒子、被阳光点燃、和平模式消失、
  * 体型随机缩放、怕猫——<b>全部与幻翼一致</b>，因为它们都是继承来的。</p>
  */
-public class HybridCreeperEntity extends Phantom {
+public class HybridCreeperEntity extends Phantom implements PoweredMob {
+
+    /**
+     * 充能状态（被闪电劈中）。
+     *
+     * <p>用同步数据而不是普通字段 —— 充能要<b>在客户端可见</b>：
+     * 那个蓝色能量层全靠这个布尔值决定画不画。
+     * 原版 {@code Creeper} 的 {@code DATA_IS_POWERED} 就是同样的做法。</p>
+     *
+     * <p>{@code defineId} 靠一个静态自增计数器分配 id，所以同一个类里只能定义一次，
+     * 也不能和父类 {@code Phantom} 的 {@code ID_SIZE} 混用 —— 那一个是在
+     * {@code Phantom} 类里用 {@code Phantom.class} 注册的，id 已经占掉了。</p>
+     */
+    private static final EntityDataAccessor<Boolean> DATA_POWERED =
+            SynchedEntityData.defineId(HybridCreeperEntity.class, EntityDataSerializers.BOOLEAN);
 
     /**
      * 构造函数签名必须与 {@code Phantom} 对齐，才能被 {@code EntityType.Builder.of(...)}
@@ -52,6 +72,74 @@ public class HybridCreeperEntity extends Phantom {
      */
     public HybridCreeperEntity(EntityType<? extends Phantom> type, Level level) {
         super(type, level);
+    }
+
+    /* ==================================================================
+     * 闪电充能（对齐原版 Creeper）
+     * ================================================================== */
+
+    /**
+     * 注册同步数据。必须调 {@code super} —— {@code Phantom} 在这里定义了它的体型
+     * （{@code ID_SIZE}），漏掉会让幻翼的随机体型功能直接失灵。
+     */
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_POWERED, false);
+    }
+
+    /** 是否处于充能状态。来自 {@code PowerableMob}，也是渲染层判断画不画能量层的依据。 */
+    @Override
+    public boolean isPowered() {
+        return this.entityData.get(DATA_POWERED);
+    }
+
+    @Override
+    public void setPowered(boolean powered) {
+        this.entityData.set(DATA_POWERED, powered);
+    }
+
+    /**
+     * 存档时记下充能状态。
+     *
+     * <p>原版 {@code Creeper} 只在<b>已充能</b>时才写这个键
+     * （{@code if (powered) tag.putBoolean("powered", true);}）——
+     * 这是刻意的省字节：没充能就不写，读的时候 {@code getBoolean} 缺键返回 false。
+     * 这里照抄，连键名 {@code "powered"} 都保持一致，
+     * 这样用 {@code /data} 查看实体 NBT 时和原版苦力怕长得一样。</p>
+     */
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        if (this.isPowered()) {
+            tag.putBoolean("powered", true);
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
+        this.setPowered(tag.getBoolean("powered"));
+    }
+
+    /**
+     * 被闪电劈中时充能。
+     *
+     * <p>触发链路：{@code LightningBolt} 每 tick 找出范围内的实体，
+     * 对每一个调用 {@code entity.thunderHit(level, bolt)}。
+     * 原版苦力怕就是在这一步把自己设成充能的，这里完全照抄。</p>
+     *
+     * <p><b>{@code super.thunderHit} 不能省</b> —— 它负责原版雷电该做的事：
+     * 点燃（{@code igniteForSeconds(8.0F)}）和造成雷电伤害。
+     * 省掉的话闪电劈中它连伤害都没有，那就不是"和原版一样"了。</p>
+     *
+     * <p>顺带一提，充能是<b>永久且不可逆</b>的 —— 原版苦力怕被劈过就一直是充能状态，
+     * 淋雨、泡水、睡觉都不会掉。这里保持一致。</p>
+     */
+    @Override
+    public void thunderHit(ServerLevel level, LightningBolt bolt) {
+        super.thunderHit(level, bolt);
+        this.setPowered(true);
     }
 
     /**

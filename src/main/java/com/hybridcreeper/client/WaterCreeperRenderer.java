@@ -40,6 +40,10 @@ import net.minecraft.util.Mth;
  *
  * <p>另外还保留了原版的<b>闪白层</b>（{@code getWhiteOverlayProgress}）：
  * 引信期间每隔几 tick 闪一下白，那是玩家判断"还剩多久"的视觉信号。</p>
+ *
+ * <h2>充能层</h2>
+ * <p>挂了一个 {@link PoweredOverlayLayer}：被闪电劈中后裹上滚动的蓝色能量。
+ * 那层不依赖模型变形，对任何模型通用，所以以后换自定义模型时不用动它。</p>
  */
 public class WaterCreeperRenderer extends MobRenderer<WaterCreeperEntity, DolphinModel<WaterCreeperEntity>> {
 
@@ -50,6 +54,10 @@ public class WaterCreeperRenderer extends MobRenderer<WaterCreeperEntity, Dolphi
     public WaterCreeperRenderer(EntityRendererProvider.Context context) {
         // 阴影半径 0.6 —— 与海豚一致（命中箱尺寸也跟海豚走，见 ModEntities）
         super(context, new DolphinModel<>(context.bakeLayer(ModelLayers.DOLPHIN)), 0.6F);
+
+        // 被闪电劈中后的蓝色能量外衣。这层对模型没有任何要求，
+        // 所以以后把海豚模型换成自定义的，这一行也不用改。
+        this.addLayer(new PoweredOverlayLayer<>(this));
     }
 
     @Override

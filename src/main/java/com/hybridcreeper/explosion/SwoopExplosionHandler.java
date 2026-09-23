@@ -143,7 +143,11 @@ public final class SwoopExplosionHandler {
                     /* damageSource     */ level.damageSources().explosion(null, null), // 无实体归属
                     /* damageCalculator */ calculator,
                     /* x, y, z          */ x, y, z,
-                    /* radius           */ HybridCreeperConfig.EXPLOSION_POWER.get().floatValue(),
+                    // 充能（被闪电劈中）时半径翻倍。等价于 Creeper#explodeCreeper 里的
+                    //   float f = this.isPowered() ? 2.0F : 1.0F;
+                    //   explode(..., (float)this.explosionRadius * f, ...);
+                    /* radius           */ HybridCreeperConfig.EXPLOSION_POWER.get().floatValue()
+                                            * blast.explosionRadiusMultiplier(),
                     /* fire             */ HybridCreeperConfig.SET_FIRE.get(),
                     /* interaction      */ interaction);
         } finally {
@@ -151,11 +155,13 @@ public final class SwoopExplosionHandler {
         }
 
         if (HybridCreeperConfig.DEBUG_LOG.get()) {
-            LOGGER.info("[HybridCreeper] 苦力怕幻翼({}) 在 ({}, {}, {}) 引爆，命中玩家 {}，威力 {}",
+            LOGGER.info("[HybridCreeper] 苦力怕幻翼({}) 在 ({}, {}, {}) 引爆，命中玩家 {}，威力 {}{}",
                     blast.getUUID(),
                     String.format("%.1f", x), String.format("%.1f", y), String.format("%.1f", z),
                     victim.getName().getString(),
-                    HybridCreeperConfig.EXPLOSION_POWER.get());
+                    HybridCreeperConfig.EXPLOSION_POWER.get().floatValue()
+                            * blast.explosionRadiusMultiplier(),
+                    blast.isPowered() ? "（充能）" : "");
         }
     }
 

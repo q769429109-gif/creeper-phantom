@@ -15,6 +15,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -67,7 +68,7 @@ import net.neoforged.neoforge.fluids.FluidType;
  * <h2>水流</h2>
  * <p>{@code isPushedByFluid()} 返回 false（与海豚一致），否则水流会把它冲到不知道哪里去。</p>
  */
-public class WaterCreeperEntity extends Monster {
+public class WaterCreeperEntity extends Monster implements PoweredMob {
 
     /* ------------------------------------------------------------------
      * 同步数据
@@ -84,6 +85,16 @@ public class WaterCreeperEntity extends Monster {
      * （比如膨胀得更快）。逻辑全部在服务端跑。</p>
      */
     private static final EntityDataAccessor<Boolean> DATA_BEACH_ASSAULT =
+            SynchedEntityData.defineId(WaterCreeperEntity.class, EntityDataSerializers.BOOLEAN);
+
+    /**
+     * 充能状态（被闪电劈中）。
+     *
+     * <p>必须同步到客户端 —— 蓝色能量层靠它决定画不画。
+     * 与 {@code HybridCreeperEntity} 里那个是同一套做法，
+     * 之所以各写一份而不用共用字段，见 {@link PoweredMob} 的类注释。</p>
+     */
+    private static final EntityDataAccessor<Boolean> DATA_POWERED =
             SynchedEntityData.defineId(WaterCreeperEntity.class, EntityDataSerializers.BOOLEAN);
 
     /* ------------------------------------------------------------------
@@ -111,6 +122,40 @@ public class WaterCreeperEntity extends Monster {
         // 海豚是原版唯一"高速追船"的生物，它的手感参数不值得我另起炉灶。
         this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true);
         this.lookControl = new SmoothSwimmingLookControl(this, 10);
+    }
+
+    /* ------------------------------------------------------------------
+     * 闪电充能（对齐原版 Creeper）
+     * ------------------------------------------------------------------ */
+
+    @Override
+    public boolean isPowered() {
+        return this.entityData.get(DATA_POWERED);
+    }
+
+    @Override
+    public void setPowered(boolean powered) {
+        this.entityData.set(DATA_POWERED, powered);
+    }
+
+    // 充能状态的读写统一放在下面的「存档」一节 —— 那里已经有
+    // addAdditionalSaveData / readAdditionalSaveData 在处理引信与爆炸半径。
+    // 一个类只能有一对这两个方法，各写一份会以「已在类中定义」编译失败。
+
+    /**
+     * 被闪电劈中时充能。
+     *
+     * <p>{@code super.thunderHit} 必须调 —— 它负责原版雷电的点燃与伤害。
+     * 具体链路见 {@code HybridCreeperEntity#thunderHit} 的注释。</p>
+     *
+     * <p>在水里被劈中的情况说明一下：{@code super} 会给它点火，
+     * 但它在水里，火会立刻被浇灭，所以实际只剩"充能 + 雷电伤害"。
+     * 这个结果是合理的，不需要特殊处理。</p>
+     */
+    @Override
+    public void thunderHit(ServerLevel level, LightningBolt bolt) {
+        super.thunderHit(level, bolt);
+        this.setPowered(true);
     }
 
     /* ------------------------------------------------------------------
@@ -258,6 +303,7 @@ public class WaterCreeperEntity extends Monster {
         super.defineSynchedData(builder);
         builder.define(DATA_SWELL_DIR, -1);
         builder.define(DATA_BEACH_ASSAULT, false);
+        builder.define(DATA_POWERED, false);
     }
 
     public int getSwellDir() {
@@ -284,6 +330,7 @@ public class WaterCreeperEntity extends Monster {
     /**
      * 引爆。数值与 {@code Creeper#explodeCreeper()} 完全一致：
      * 半径 3、{@code ExplosionInteraction.MOB}（受 mobGriefing 约束）、炸完立即移除自己。
+     * <b>充能状态下半径翻倍</b>（3 → 6），倍率见 {@link PoweredMob#CHARGED_EXPLOSION_MULTIPLIER}。
      */
     public void explode() {
         if (this.level().isClientSide) {
@@ -293,7 +340,7 @@ public class WaterCreeperEntity extends Monster {
         this.level().explode(
                 this,
                 this.getX(), this.getY(), this.getZ(),
-                (float) this.explosionRadius,
+                (float) this.explosionRadius * this.explosionRadiusMultiplier(),
                 Level.ExplosionInteraction.MOB);
         this.triggerOnDeathMobEffects(Entity.RemovalReason.KILLED);
         this.discard();
@@ -347,6 +394,14 @@ public class WaterCreeperEntity extends Monster {
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+
+        // 充能状态。键名 "powered" 与原版 Creeper 完全一致，
+        // 这样用 /data get entity 查看实体 NBT 时和原版苦力怕长得一样。
+        // 只在已充能时才写 —— 原版也是这么省字节的（读的时候缺键 getBoolean 返回 false）。
+        if (this.isPowered()) {
+            tag.putBoolean("powered", true);
+        }
+
         tag.putShort("Fuse", (short) this.maxSwell);
         tag.putByte("ExplosionRadius", (byte) this.explosionRadius);
     }
@@ -354,6 +409,7 @@ public class WaterCreeperEntity extends Monster {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        this.setPowered(tag.getBoolean("powered"));
         if (tag.contains("Fuse", 99)) {
             this.maxSwell = tag.getShort("Fuse");
         }
