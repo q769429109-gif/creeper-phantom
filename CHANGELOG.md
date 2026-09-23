@@ -8,6 +8,22 @@
 
 ---
 
+## [1.3.1] — 2026-09-23
+
+### 修复
+
+- **水下苦力怕在水中移动过慢（严重手感问题）**：
+  根因是 `LivingEntity.travel()` 把水中的速度系数**硬编码成 `0.02F`**，
+  只有 `NeoForgeMod.SWIM_SPEED`（或 `WATER_MOVEMENT_EFFICIENCY`）属性能放大它。
+  此前水下苦力怕没有注册 `SWIM_SPEED`，导致 `SmoothSwimmingMoveControl` 设的速度、
+  `MOVEMENT_SPEED = 1.5` 全被无视，实际只有约 **0.02 格/tick（≈0.4 米/秒），几乎不动**——
+  也就是 1.2.0 说的"在水里比船还快"其实一直是坏的。
+  现已在 `WaterCreeperEntity.createAttributes()` 注册
+  `NeoForgeMod.SWIM_SPEED = 15.0`（即 `0.02 × 15 = 0.3 格/tick ≈ 6 米/秒`），
+  恢复"高速撞船"的设计手感。**想调快慢只改这一个值即可。**
+
+---
+
 ## [1.3.0] — 2026-09-23
 
 **首个公开发布版本。**
@@ -128,5 +144,6 @@
 
 ---
 
+[1.3.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.1
 [1.3.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.0
 [1.2.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.2.0

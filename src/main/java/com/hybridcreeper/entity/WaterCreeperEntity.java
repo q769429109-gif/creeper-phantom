@@ -32,6 +32,7 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
 
 /**
@@ -173,6 +174,13 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
      *   <tr><td>ATTACK_DAMAGE</td><td>4</td><td>撞击伤害（爆炸另算）</td></tr>
      *   <tr><td>FOLLOW_RANGE</td><td>32</td><td>主动索敌距离</td></tr>
      *   <tr><td>KNOCKBACK_RESISTANCE</td><td>0.3</td><td>免得被自己的爆炸掀得满海乱飞</td></tr>
+     *   <tr><td>SWIM_SPEED</td><td><b>15</b></td>
+     *       <td>NeoForge 标准扩展属性（默认 1.0）。这是"在水里很慢"的真正根因：
+     *       {@code LivingEntity.travel()} 在水中的速度系数被硬编码成 {@code 0.02F}，
+     *       只有本属性（或 WATER_MOVEMENT_EFFICIENCY）能把它放大；否则
+     *       SmoothSwimmingMoveControl 设的速度、MOVEMENT_SPEED 全被无视，
+     *       结果就是 0.02 格/tick（≈0.4 米/秒）几乎不动。15 倍 ≈ 0.3 格/tick（≈6 米/秒），
+     *       配合上面的 MOVEMENT_SPEED 形成"高速撞船"的手感。调这个值就能调水下速度。</td></tr>
      * </table>
      */
     public static AttributeSupplier.Builder createAttributes() {
@@ -181,7 +189,14 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
                 .add(Attributes.MOVEMENT_SPEED, 1.5)
                 .add(Attributes.ATTACK_DAMAGE, 4.0)
                 .add(Attributes.FOLLOW_RANGE, 32.0)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0.3);
+                .add(Attributes.KNOCKBACK_RESISTANCE, 0.3)
+                // 游泳速度倍率（NeoForge 标准扩展属性，默认 1.0）。
+                // 关键：LivingEntity.travel 在水里把速度系数先锁死成硬编码的 0.02，
+                // 只有这个属性（或 WATER_MOVEMENT_EFFICIENCY）能把它放大；
+                // 否则 SmoothSwimmingMoveControl 设的速度、MOVEMENT_SPEED 全被无视，
+                // 结果就是"在水里几乎不动"。15 倍 ≈ 0.3 格/tick（约 6 格/秒），
+                // 配合上面的 MOVEMENT_SPEED 形成"高速撞船"的手感。
+                .add(NeoForgeMod.SWIM_SPEED, 15.0);
     }
 
     /* ------------------------------------------------------------------
