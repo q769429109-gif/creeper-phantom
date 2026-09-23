@@ -24,19 +24,25 @@ rendertype_energy_swirl.fsh 的关键两行：
 原版 creeper_armor.png 的实测特征（参考用）：
   64×32、非透明像素 31.4%、平均色 (39,113,191)、
   alpha 是【二值】的 —— 只有 0 和 224~255 两档，没有中间过渡。
-  也就是说原版那身能量是「硬边图案」，不是一层均匀的雾。
+  也就是说原版那身能量是「硬边方块图案」，不是一层均匀的电浆雾。
+  我们要求的是这种「低像素方块」质感（2026-09-23 用户指定）。
 
 ======================================================================
-为什么是 128×128 且全幅无接缝
+为什么是 128×128 且全幅无接缝 —— 方块版的做法
 ======================================================================
-1. 图层滚动的是纹理坐标（TextureMat 平移）。**只要有一处接缝，滚动时就会看到
-   明显的硬边在模型上爬**。所以噪声必须是可平铺的 —— 这里用「网格索引取模」的
-   值噪声实现，天生无缝，不需要事后羽化边缘。
-2. 用全幅无缝图而不是像原版那样按模型 UV 画异形图，是因为：
-   · 模型只会采样到自己 UV 覆盖到的像素，全幅效果与异形图完全一样；
+1. 把 128×128 切成 GRID×GRID 个大方块（默认 16×16，每格 CELL=8 像素）。
+   先在 GRID×GRID 的「低分辨率」网格上算可平铺值噪声，决定每个方块是
+   暗蓝 / 中蓝 / 亮青白 / 透明，再用【最近邻】上采样回 128。
+   硬边马赛克就是这么来的 —— 没有任何抗锯齿、没有任何模糊。
+2. 网格用「索引取模」的值噪声，周期天然闭合，上采样也不会破缝。
+   滚动的是纹理坐标（TextureMat 平移），所以只要贴图自身无缝，滚动时
+   就不会看到接缝在模型上爬。
+3. 用全幅无缝图而不是像原版那样按模型 UV 画异形图：
+   · 模型只采样到自己 UV 覆盖的像素，全幅效果与异形图完全一样；
    · 一张图能同时服务两只 UV 排布完全不同的生物；
    · 纯算法生成，不含任何 Mojang 素材衍生，没有版权负担。
-3. 用 128 而不是 64：噪声细节更细，滚动时更顺滑。代价只有 64KB。
+4. 用 128 而不是 64：方块仍是 8px 的硬边，但整张贴图信息更足，
+   在 2 格高的模型上铺出来不至于糊。代价只有 64KB。
 
 运行：python make_charged_energy.py
 """
@@ -49,7 +55,7 @@ import zlib
 
 # ---------------------------------------------------------------- 配置
 
-OUT_SIZE = 128                 # 输出边长（正方形，保证 2 的幂以便无缝）
+OUT_SIZE = 128                 # 输出边长（正方形，2 的幂）
 SEED = 20260923                # 固定种子，保证可复现
 
 # 输出路径（相对本脚本：tools/ -> ../../src/main/resources/...）
@@ -58,31 +64,37 @@ PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 TARGET = os.path.join(
     PROJECT_ROOT, "src", "main", "resources",
     "assets", "hybridcreeper", "textures", "entity", "charged_energy.png")
-PREVIEW = os.path.join(PROJECT_ROOT, "vanilla-reference", "bbmodel",
-                       "preview_charged_energy.png")
+# 预览放进被 .gitignore 兜住的 vanilla-reference/textures/，避免误提交
+PREVIEW = os.path.join(
+    PROJECT_ROOT, "vanilla-reference", "textures", "preview_charged_energy.png")
 
-# 可见性阈值不写死，而是按「目标覆盖率」反推 —— 见 build()。
-# 原因：v 的分布是偏高的（脊化噪声 skew 很大），写死阈值很难对准，
-# 换个权重就得重调一遍。按分位数取阈值则永远命中目标。
-#
-# 注意：着色器在 alpha < 0.1（即 26/255）时 discard，而边缘有一条抗锯齿斜坡，
-# 所以真实可见比例会略高于这里的目标值。0.42 对应实测约 45%。
-TARGET_COVERAGE = 0.42
+# 【方块感的核心参数】
+# 128 / 8 = 16 -> 整张贴图被切成 16×16 个 8px 大方块。
+# 这个比例与原版 creeper_armor 在 64 宽贴图上的 2~4px 特征相当：
+# 既够"低像素方块"，滚动时又不会糊成一片噪点。
+CELL = 8
+GRID = OUT_SIZE // CELL        # = 16
 
-# 边缘抗锯齿斜坡的宽度（相对 v 的取值范围）。太窄会有锯齿，太宽就成雾了。
-EDGE_RAMP = 0.05
+# 噪声晶格数（必须整除 GRID）。NOISE_CELLS=4 -> 方块聚成约 4×4 的"光斑群"，
+# 而不是国际象棋盘那种均匀散点。第二阶翻倍叠一层细碎起伏，让边界不那么死板。
+NOISE_CELLS = 4
 
-# 颜色端点：暗蓝 -> 亮青白。中间值大致落在原版平均色 (39,113,191) 附近。
-COLOR_DARK = (22, 62, 158)
-COLOR_BRIGHT = (208, 248, 255)
+# 目标可见覆盖率。与原版 creeper_armor 的 31.4% 同量级，略放宽到 0.40
+# 让蓝色更明显一点（我们的方块比原版更稀疏也更亮）。
+TARGET_COVERAGE = 0.40
 
-# 主体权重 / 脊化权重。脊化那条（电弧纤维）给得比主体重，
-# 是为了让轮廓偏向「细长亮线」而不是「大块云团」。
-W_BODY = 0.50
-W_VEIN = 0.85
+# 三档蓝色（贴图侧，着色器会再 ×0.5）。
+# 从暗到亮，亮档带青白高光 —— 复刻原版那种"有高光的层次"，不是一片均匀蓝雾。
+COLOR_TIERS = [
+    (34, 96, 196),     # 暗蓝（多数可见方块）
+    (96, 176, 255),    # 中蓝
+    (200, 236, 255),   # 亮青白（峰顶高光）
+]
 
-# 脊化噪声的锐化指数。>1 会把亮线收得更细更亮，电弧感更强。
-VEIN_SHARPEN = 1.6
+# 各档的判定阈值（相对"可见区间内"的归一化强度 t∈[0,1]）。
+# t<0.5 暗蓝；0.5~0.85 中蓝；>0.85 亮青白。
+TIER_MID = 0.50
+TIER_HI = 0.85
 
 
 # ---------------------------------------------------------------- PNG 读写
@@ -162,67 +174,52 @@ def fbm(size, octaves, rng):
 
 # ---------------------------------------------------------------- 合成
 
-def smoothstep(e0, e1, x):
-    if e1 == e0:
-        return 0.0 if x < e0 else 1.0
-    t = (x - e0) / (e1 - e0)
-    t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-    return t * t * (3.0 - 2.0 * t)
-
-
 def build():
     rng = random.Random(SEED)
-    size = OUT_SIZE
-    n = size * size
 
-    # ① 主体等离子团：低频大块 + 中高频碎纹。
-    #    频率刻意取得低 —— 贴图会被 UV 铺满整个模型，128px 铺在 2 格高的生物身上，
-    #    再细下去就成"噪点"而不是"光斑"了。对齐原版 creeper_armor 那种大块观感。
-    body = fbm(size, [(2, 1.00), (4, 0.62), (8, 0.36), (16, 0.20)], rng)
+    # ① 在 GRID×GRID（16×16）的低分辨率网格上做可平铺噪声。
+    #    两阶：NOISE_CELLS 出大光斑群，翻倍那阶补一点细碎起伏。
+    field = fbm(GRID, [(NOISE_CELLS, 1.00), (NOISE_CELLS * 2, 0.5)], rng)
 
-    # ② 电弧纤维：另一个独立噪声做「脊化」变换，
-    #    1-|2n-1| 会把噪声的等值线转成细长的亮线，看起来像电流。
-    rng2 = random.Random(SEED + 7)
-    veins = fbm(size, [(4, 1.00), (8, 0.70), (16, 0.45), (32, 0.25)], rng2)
-    ridged = [(1.0 - abs(2.0 * v - 1.0)) ** VEIN_SHARPEN for v in veins]
-
-    total_w = W_BODY + W_VEIN
-    field = [(body[i] * W_BODY + ridged[i] * W_VEIN) / total_w for i in range(n)]
-
-    # 阈值 = 按目标覆盖率取分位数。这样无论上面权重怎么调，覆盖率都稳。
+    # ② 阈值：按目标覆盖率取分位数 —— 无论权重怎么调，覆盖率都稳。
     ordered = sorted(field)
+    n = len(field)
     thr = ordered[min(n - 1, int(n * (1.0 - TARGET_COVERAGE)))]
-    # 亮端取 99.5 分位而不是最大值 —— 用最大值会把渐变压得太扁，
-    # 结果整片偏暗蓝、只有零星几点白。
-    top = ordered[min(n - 1, int(n * 0.995))]
-    span = max(top - thr, 1e-6)
-    lo = thr - EDGE_RAMP * 0.5
-    hi = thr + EDGE_RAMP * 0.5
+    vmax = ordered[-1]
+    span = max(vmax - thr, 1e-6)
 
-    px = bytearray(n * 4)
-    visible = 0
-    for i in range(n):
-        v = field[i]
-
-        # 抗锯齿：阈值附近做一条窄斜坡，避免硬阈值的锯齿（原版是纯二值，更糙）
-        a = int(round(smoothstep(lo, hi, v) * 255.0))
+    # ③ 逐方块定颜色。可见方块按强度分三档蓝，不可见就全透明（二值 alpha）。
+    cell_rgba = []
+    for v in field:
+        if v <= thr:
+            cell_rgba.append((0, 0, 0, 0))
+            continue
         t = (v - thr) / span
-        t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+        if t < TIER_MID:
+            c = COLOR_TIERS[0]
+        elif t < TIER_HI:
+            c = COLOR_TIERS[1]
+        else:
+            c = COLOR_TIERS[2]
+        cell_rgba.append((c[0], c[1], c[2], 255))
 
-        # 颜色：暗蓝 -> 亮青白。t 做 0.8 次幂，让亮核更集中。
-        tt = t ** 0.8
-        r = int(COLOR_DARK[0] + (COLOR_BRIGHT[0] - COLOR_DARK[0]) * tt)
-        g = int(COLOR_DARK[1] + (COLOR_BRIGHT[1] - COLOR_DARK[1]) * tt)
-        b = int(COLOR_DARK[2] + (COLOR_BRIGHT[2] - COLOR_DARK[2]) * tt)
+    # ④ 最近邻上采样：GRID×GRID -> OUT_SIZE×OUT_SIZE，硬边马赛克由此而来。
+    px = bytearray(OUT_SIZE * OUT_SIZE * 4)
+    for gy in range(GRID):
+        for gx in range(GRID):
+            r, g, b, a = cell_rgba[gy * GRID + gx]
+            by = gy * CELL
+            bx = gx * CELL
+            for dy in range(CELL):
+                row = (by + dy) * OUT_SIZE
+                for dx in range(CELL):
+                    j = (row + bx + dx) * 4
+                    px[j] = r
+                    px[j + 1] = g
+                    px[j + 2] = b
+                    px[j + 3] = a
 
-        j = i * 4
-        px[j] = r
-        px[j + 1] = g
-        px[j + 2] = b
-        px[j + 3] = a
-        if a > 25:              # 26/255 以上才不会被着色器 discard
-            visible += 1
-
+    visible = sum(1 for (_, _, _, a) in cell_rgba if a > 0) * CELL * CELL
     return px, visible
 
 
@@ -255,7 +252,7 @@ def check_seam(px, size):
 
 
 def make_preview(px, size, path, scale=3, tiles=2):
-    """把贴图 2×2 平铺再放大，用来看接缝。"""
+    """把贴图 2×2 平铺再放大，用来看接缝和整体观感。"""
     W = size * tiles * scale
     H = size * tiles * scale
     out = bytearray(W * H * 4)
@@ -282,13 +279,14 @@ def make_preview(px, size, path, scale=3, tiles=2):
 # ---------------------------------------------------------------- main
 
 def main():
-    print("生成充能能量贴图 %d×%d（种子 %d）" % (OUT_SIZE, OUT_SIZE, SEED))
+    print("生成充能能量贴图（低像素方块版）%dx%d  CELL=%d GRID=%d 种子 %d"
+          % (OUT_SIZE, OUT_SIZE, CELL, GRID, SEED))
     print()
 
     px, visible = build()
     total = OUT_SIZE * OUT_SIZE
     cov = visible / total
-    print("  非透明像素: %d / %d = %.1f%%（原版参考 31.4%%，目标 %.0f%%）"
+    print("  非透明像素: %d / %d = %.1f%%（原版 creeper_armor 参考 31.4%%，目标 %.0f%%）"
           % (visible, total, cov * 100, TARGET_COVERAGE * 100))
 
     print()
@@ -301,7 +299,7 @@ def main():
     print("  已写出:", os.path.relpath(TARGET, PROJECT_ROOT))
 
     w, h = make_preview(px, OUT_SIZE, PREVIEW)
-    print("  已写出预览:", os.path.relpath(PREVIEW, PROJECT_ROOT), "(%d×%d, 2×2 平铺)" % (w, h))
+    print("  已写出预览:", os.path.relpath(PREVIEW, PROJECT_ROOT), "(%dx%d, 2x2 平铺)" % (w, h))
 
 
 if __name__ == "__main__":
