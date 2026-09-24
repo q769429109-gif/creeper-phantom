@@ -12,10 +12,11 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * {@code level.explode(this, x, y, z, explosionRadius, ExplosionInteraction.MOB)} 完全一致
  * （苦力怕默认 {@code explosionRadius = 3}）。</p>
  *
- * <h2>生成默认值</h2>
- * <p>{@code [spawn]} 段里的每一项默认值都抄自原版
- * {@code net.minecraft.world.level.levelgen.PhantomSpawner} 的硬编码常量，
- * 所以开箱即用时苦力怕幻翼的生成条件与幻翼<b>完全相同</b>。</p>
+ * <h2>生成默认值（v1.11.0 起）</h2>
+ * <p>{@code [spawn]} 段现在只剩一个总开关 —— 苦力怕幻翼改为<b>独立怪物生成</b>：
+ * 生成位置由 {@code SpawnPlacements} 注册（与僵尸同款：夜晚/阴暗 + 地面），
+ * 密度由数据包 {@code biome_modifier/creeper_phantom_spawns.json} 的 {@code weight} 决定。
+ * 它不再伴随原版幻翼、也不再看玩家的失眠统计。</p>
  */
 public final class HybridCreeperConfig {
 
@@ -55,29 +56,6 @@ public final class HybridCreeperConfig {
 
     /** 是否参与自然生成。关掉后只能靠指令或刷怪蛋生成。 */
     public static final ModConfigSpec.BooleanValue SPAWN_ENABLED;
-
-    /**
-     * 是否沿用原版幻翼的「失眠」限制（玩家连续若干游戏日没睡觉才有机会遇到它）。
-     *
-     * <p>默认 <b>false</b> —— 2026-09-24 按主人要求去掉「三天不睡觉」这条限制。
-     * 改成 true 即恢复原版行为，阈值由 {@link #MIN_TICKS_SINCE_REST} 决定。</p>
-     */
-    public static final ModConfigSpec.BooleanValue SPAWN_REQUIRE_INSOMNIA;
-
-    /** 失眠时长门槛（tick）。原版幻翼 = 72000（3 个游戏日）。仅在 requireInsomnia = true 时参与判定。 */
-    public static final ModConfigSpec.IntValue MIN_TICKS_SINCE_REST;
-
-    /** 夜晚亮度阈值。原版幻翼 = 5（getSkyDarken() 小于它才算天黑）。 */
-    public static final ModConfigSpec.IntValue SKY_DARKEN_THRESHOLD;
-
-    /** 生成尝试间隔下限（秒）。原版幻翼 = 60。 */
-    public static final ModConfigSpec.IntValue SPAWN_INTERVAL_MIN_SECONDS;
-
-    /** 生成尝试间隔上限（秒，不含）。原版幻翼 = 120（实际区间 [60, 120)）。 */
-    public static final ModConfigSpec.IntValue SPAWN_INTERVAL_MAX_SECONDS;
-
-    /** 一次生成尝试刷出的数量倍率。原版幻翼 = 1（按难度刷 1~N 只）；本模组默认 2（两倍）。 */
-    public static final ModConfigSpec.IntValue SPAWN_COUNT_MULTIPLIER;
 
     /* ---------------- 调试 ---------------- */
 
@@ -174,35 +152,16 @@ public final class HybridCreeperConfig {
         b.pop();
 
         b.comment("自然生成 Natural Spawning",
-                        "以下默认值均与原版幻翼 PhantomSpawner 的硬编码常量一致。",
-                        "苦力怕幻翼只在「原版会刷幻翼」的维度里生效（主世界）。")
+                        "v1.11.0 起苦力怕幻翼是「独立怪物」：走标准怪物刷新循环",
+                        "（与僵尸同池同判定），不再伴随原版幻翼、也不看玩家失眠。")
                 .push("spawn");
         SPAWN_ENABLED = b.comment("是否参与自然生成。",
                         "false = 世界里不会自己刷出来，只能用指令 /summon 或刷怪蛋。",
-                        "true = 与原版幻翼完全相同的条件（夜晚 + 连续 3 天不睡觉 + 头顶见天）。")
+                        "生成条件：夜晚或阴暗处（与僵尸同款判定），主世界。",
+                        "密度由生物群系修饰符里的 weight 控制（默认 20，",
+                        "参照：末影人 10、苦力怕 100），见",
+                        "data/hybridcreeper/neoforge/biome_modifier/creeper_phantom_spawns.json。")
                 .define("naturalSpawn", true);
-        SPAWN_REQUIRE_INSOMNIA = b.comment("是否沿用原版幻翼的「失眠」限制（连续几天不睡觉才刷）。",
-                        "false = 去掉这条限制，满足夜晚/高度等条件就会刷（默认）；",
-                        "true  = 恢复原版行为：玩家需连续 minTicksSinceRest 没睡觉才有机会遇到它。",
-                        "⚠️ 游戏规则 doInsomnia 不受本项影响 —— 它是全局幻翼开关：",
-                        "   /gamerule doInsomnia false 会让原版幻翼与我们这只都停刷。")
-                .define("requireInsomnia", false);
-        MIN_TICKS_SINCE_REST = b.comment("玩家距上次睡觉至少多少 tick 才会刷。",
-                        "原版幻翼 = 72000（= 3 个游戏日 = 60 分钟）。调低会明显变多。",
-                        "⚠️ 仅在 requireInsomnia = true 时参与判定；默认 false，本项被跳过。")
-                .defineInRange("minTicksSinceRest", 72000, 0, Integer.MAX_VALUE);
-        SKY_DARKEN_THRESHOLD = b.comment("天黑程度阈值：getSkyDarken() 小于它才算夜晚。",
-                        "原版幻翼 = 5。数值越小白天的容忍度越低。")
-                .defineInRange("skyDarkenThreshold", 5, 0, 15);
-        SPAWN_INTERVAL_MIN_SECONDS = b.comment("生成尝试间隔下限（秒）。原版幻翼 = 60。")
-                .defineInRange("spawnIntervalMinSeconds", 60, 1, 3600);
-        SPAWN_INTERVAL_MAX_SECONDS = b.comment("生成尝试间隔上限（秒，不含）。原版幻翼 = 120。",
-                        "即实际间隔在 [下限, 上限) 之间随机取。")
-                .defineInRange("spawnIntervalMaxSeconds", 120, 1, 3600);
-        SPAWN_COUNT_MULTIPLIER = b.comment("一次生成尝试刷出的数量倍率（相对原版幻翼）。",
-                        "原版幻翼 = 1（按难度刷 1~N 只）；本模组默认 2 = 两倍。",
-                        "想恢复与原版完全一致的数量，改成 1。")
-                .defineInRange("spawnCountMultiplier", 2, 1, 20);
         b.pop();
 
         b.comment("调试 Debug").push("debug");

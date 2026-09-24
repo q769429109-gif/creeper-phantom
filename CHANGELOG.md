@@ -8,6 +8,40 @@
 
 ---
 
+## [1.11.0] — 2026-09-24
+
+### 变更
+
+- **苦力怕幻翼改为「独立怪物生成」**，不再伴随原版幻翼。
+  - 移除 `HybridCreeperSpawner`（CustomSpawner，逐行模仿原版 `PhantomSpawner`）与
+    `HybridCreeperSpawnHook`（`ModifyCustomSpawnersEvent` 注入）。两文件已清空为存根
+    （沙箱环境下无法删除文件，下个大版本可清理）。
+  - 改为**标准自然生成**：
+    1. `SpawnPlacements` 注册：`ON_GROUND` + `MOTION_BLOCKING_NO_LEAVES` ——
+       与原版所有飞行生物（鹦鹉/蝙蝠/恶魂）和地面怪物（僵尸/苦力怕）**完全同款**，
+       生成点落在地表，落地起飞由 `FlyingMoveControl` 完成；
+    2. 谓词 `checkCreeperPhantomSpawnRules`：非和平难度 + 够暗
+       （`Monster#isDarkEnoughToSpawn`，与僵尸同款 → 夜晚/阴暗处）+ `naturalSpawn` 开关；
+    3. 新增生物群系修饰符 `creeper_phantom_spawns.json`（`add_spawns`，
+       `#minecraft:is_overworld`，weight 20 / 1~2）。
+
+### 移除
+
+- 配置项删掉 6 个只为旧机制服务的项：`requireInsomnia`、`minTicksSinceRest`、
+  `skyDarkenThreshold`、`spawnIntervalMinSeconds`、`spawnIntervalMaxSeconds`、
+  `spawnCountMultiplier`。`[spawn]` 段现在只剩 `naturalSpawn`。
+- 生成密度改由数据包里的 `weight` 控制（默认 20；参照：末影人 10、苦力怕 100）。
+  旧存档/旧配置文件里的多余键会被忽略，不影响启动。
+
+### 排查记录（主人反馈「连普通幻翼都没生成」）
+
+- 实查存档：`doInsomnia = true`、`doMobSpawning = true`、存档时为正午夜
+  （`DayTime = 68238`，当天第 20238 tick = 夜晚）。
+- 真因：玩家的 `time_since_rest = 1179` tick（约 1 分钟）——**刚睡过觉**，
+  而原版幻翼要求 ≥ 72000（3 个游戏日）才会出现。
+  **这是原版正常行为，本模组没有干扰**：注入方式一直是"追加"（`addCustomSpawner`），
+  从不替换原版 `PhantomSpawner`，代码里对 `TIME_SINCE_REST` 也只有读取、没有写入。
+
 ## [1.10.0] — 2026-09-24
 
 ### 变更
@@ -394,6 +428,7 @@ checkSpawnObstruction / checkSpawnPosition / noCollision` 全 `true`。
 
 ---
 
+[1.11.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.11.0
 [1.10.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.10.0
 [1.9.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.9.1
 [1.9.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.9.0

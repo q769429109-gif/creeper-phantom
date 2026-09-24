@@ -1,6 +1,7 @@
 package com.hybridcreeper;
 
 import com.hybridcreeper.config.HybridCreeperConfig;
+import com.hybridcreeper.entity.HybridCreeperEntity;
 import com.hybridcreeper.entity.ModEntities;
 import com.hybridcreeper.entity.WaterCreeperEntity;
 import com.hybridcreeper.item.ModItems;
@@ -44,10 +45,17 @@ import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
  *   <li>{@link #onEntityAttributeCreation} —— 实体属性（mod 事件总线，
  *       在注册之后、common setup 之前触发）；</li>
  *   <li>{@link #onBuildCreativeTabContents} —— 把刷怪蛋塞进创造模式物品栏（mod 事件总线）；</li>
- *   <li>{@code HybridCreeperSpawnHook} —— 自然生成器注入（游戏事件总线）；</li>
+ *   <li>{@link #onRegisterSpawnPlacements} —— 两只生物的生成位置与附加谓词（mod 事件总线）；</li>
  *   <li>{@code SwoopExplosionHandler} —— 俯冲引爆逻辑（游戏事件总线）；</li>
  *   <li>{@code HybridCreeperClient} —— 模型图层与渲染器（mod 事件总线，仅客户端）。</li>
  * </ul>
+ *
+ * <h2>生成机制（v1.11.0 起）</h2>
+ * <p>两只生物都走<b>标准自然生成</b>：{@code SpawnPlacements} 注册位置类型与谓词 +
+ * 生物群系修饰符 {@code neoforge:add_spawns} 把它们塞进各自分类的刷新池。
+ * 苦力怕幻翼是 <b>MONSTER</b>（夜晚、随怪物刷新循环）、苦力怕海豚是
+ * <b>WATER_CREATURE</b>（水里、与墨鱼同池）。早期的「CustomSpawner 伴随原版幻翼」
+ * 方案已于 v1.11.0 移除（HybridCreeperSpawner / HybridCreeperSpawnHook 已清空）。</p>
  */
 @Mod(HybridCreeper.MODID)
 public class HybridCreeper {
@@ -135,11 +143,25 @@ public class HybridCreeper {
      * 只保留"不是和平难度 + 全身在水里"。</p>
      */
     private static void onRegisterSpawnPlacements(RegisterSpawnPlacementsEvent event) {
+        // ---- 苦力怕海豚：水里生成（v1.7.0 起就是标准机制，未改动）----
         event.register(
                 ModEntities.WATER_CREEPER.get(),
                 SpawnPlacementTypes.IN_WATER,
                 Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 HybridCreeper::checkWaterCreeperSpawnRules,
+                RegisterSpawnPlacementsEvent.Operation.REPLACE);
+
+        // ---- 苦力怕幻翼：v1.11.0 起改为独立怪物生成 ----
+        // 位置类型 ON_GROUND + 高度图 MOTION_BLOCKING_NO_LEAVES —— 与原版所有
+        // 飞行生物（鹦鹉/蝙蝠/恶魂）和地面怪物（僵尸/苦力怕）完全同款：
+        // 生成点落在地表（实心方块上方、无液体），落地起飞由 FlyingMoveControl 自己完成。
+        // 生成时机/位置由「怪物刷新循环 + 生物群系修饰符 add_spawns」接管，
+        // 不再伴随原版幻翼、也不再要求玩家失眠。
+        event.register(
+                ModEntities.CREEPER_PHANTOM.get(),
+                SpawnPlacementTypes.ON_GROUND,
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                HybridCreeper::checkCreeperPhantomSpawnRules,
                 RegisterSpawnPlacementsEvent.Operation.REPLACE);
     }
 
@@ -204,5 +226,43 @@ public class HybridCreeper {
         }
         // 生成点那一格是水就够了 —— 1 格深的浅水/小水坑也算"水域"
         return level.getFluidState(pos).is(FluidTags.WATER);
+    }
+
+    /**
+     * 苦力怕幻翼能否在这个位置自然生成（v1.11.0 起，独立怪物生成机制）。
+     *
+     * <p>与僵尸用的是同一套判定，只有两条：</p>
+     * <ul>
+     *   <li>难度不是和平；</li>
+     *   <li>够暗（{@code Monster#isDarkEnoughToSpawn}，阈值随维度难度浮动）——
+     *       所以它和僵尸一样<b>只在夜晚/阴暗处自然生成</b>，白天出来会被阳光点燃，
+     *       与原版幻翼的作息一致。</li>
+     * </ul>
+     *
+     * <p>再挂一个配置总开关 {@code [spawn] naturalSpawn}：关掉后不会自然刷，
+     * 但 {@code /summon} 和刷怪蛋不受影响（这套谓词只拦自然生成）。</p>
+     *
+     * <h2>为什么不再有失眠判定</h2>
+     * <p>原版幻翼的「三天不睡」写在它自己的 {@code PhantomSpawner} 里，
+     * 与本谓词无关。v1.10.0 我们去掉了它；v1.11.0 进一步改为独立生成后，
+     * 与原版幻翼的生成方式彻底解耦 —— <b>原版幻翼该不该来，完全由原版自己的规则决定</b>。</p>
+     */
+    private static boolean checkCreeperPhantomSpawnRules(EntityType<HybridCreeperEntity> type,
+                                                         LevelAccessor level,
+                                                         MobSpawnType spawnType,
+                                                         BlockPos pos,
+                                                         RandomSource random) {
+        // 关掉后它不会自己刷出来，但仍然能用 /summon 或刷怪蛋生成
+        if (!HybridCreeperConfig.SPAWN_ENABLED.get()) {
+            return false;
+        }
+        if (!(level instanceof ServerLevelAccessor serverLevel)) {
+            return false;
+        }
+        if (serverLevel.getDifficulty() == Difficulty.PEACEFUL) {
+            return false;
+        }
+        // 夜晚/够暗才刷 —— 与僵尸同款。白天阳光会点燃它（原版幻翼的作息）
+        return Monster.isDarkEnoughToSpawn(serverLevel, pos, random);
     }
 }
