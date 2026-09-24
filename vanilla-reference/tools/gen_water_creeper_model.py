@@ -3,24 +3,19 @@
 """
 creeperdolphin.bbmodel  ->  WaterCreeperModel.java
 
-水下苦力怕的自定义模型生成器（海豚身体/鳍 + 苦力怕躯干/头/四条腿）。
+水下苦力怕的自定义模型生成器（海豚身体/鳍 + 苦力怕躯干/头/四条腿），
+**并**把 .bbmodel 里的 swim 动画一起转成 setupAnim。
 
-为什么单独写一个、不复用 bbmodel_to_java.py 的 emit_java：
-  bbmodel_to_java.py 的 emit 是给「幻翼+苦力怕」硬编码的（翅膀字段、Phantom 泛型、
-  扇翅动画）。本模型的部件集合、动画（水中摆尾）完全不同，所以这里只复用它的
-  坐标换算与 AABB 交叉验证思路，emit 部分重写。
+与第一版的区别（第一版把分组拍平了）：
+  现在**按 .bbmodel 的骨头层级原样生成**（每个 group = 一个部件），
+  这样动画里的 animator（按骨头 uuid 索引）能 1:1 落到 Java 部件上；
+  以后在主人的 Blockbench 里改动画，重跑本脚本即可。
 
-与 bbmodel_to_java.py 的两处适配：
-  1. 本模型的 group 全是「无名字、无 origin、无旋转」的纯文件夹分组，
-     所以把所有立方体拍平到同一个 body 容器下（不需要合成子部件层级）；
-  2. 动画用的 body 容器轴心取原版海豚的 (0, 22, -5) —— 这样 body 立方体的
-     addBox 与 DolphinModel 逐字一致，水中摆尾动画也能照搬海豚。
-
-Blockbench 的 Modded Entity 格式（flip_y = true）到 Java 的换算：
-    世界坐标   java = ( -bb.x , 24 - bb.y , bb.z )
-    部件轴心   PartPose.offset   = 轴心世界坐标 - 父级轴心世界坐标
-    立方体     addBox(x,y,z,dx,dy,dz) : (x,y,z) = 立方体世界最小角 - 部件轴心世界坐标
-    旋转       java = ( -rad(rx) , -rad(ry) , +rad(rz) )
+坐标换算（Blockbench Modded Entity, flip_y=true）：
+    java = ( -bb.x , 24 - bb.y , bb.z )
+    部件轴心 PartPose.offset = 轴心世界坐标 - 父级轴心世界坐标
+    立方体 addBox(x,y,z,dx,dy,dz): (x,y,z) = 立方体世界最小角 - 部件轴心世界坐标
+    旋转 java = ( -rad(rx) , -rad(ry) , +rad(rz) )      （动画关键帧同理）
 """
 
 import json
@@ -29,136 +24,118 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 REF = os.path.dirname(HERE)
 BB_PATH = os.path.join(REF, "bbmodel", "creeperdolphin.bbmodel")
 OUT_JAVA = os.path.join(REF, "bbmodel", "WaterCreeperModel.java.txt")
+FPS = 20.0
 
-# 动画容器（body）的绝对轴心 —— 与 DolphinModel 的 body 一致
-BODY_PIVOT = (0.0, 22.0, -5.0)
-
-# 元素名 -> Java 部件名（去重 / 去掉无意义的重名）
-RENAME = {
-    # 带旋转的那个 8x12x4 "body" 其实是苦力怕躯干，跟海豚身体重名了
-    "creeper_torso": "creeper_torso",
-}
+import bbmodel_to_java as G  # noqa: E402
 
 
-def rad(v):
-    return math.radians(v)
+# --------------------------------------------------------------------------
+# 1. 预处理：给分组注入名字（优先用动画里的骨头名），并给重名元素改名
+# --------------------------------------------------------------------------
 
+def prep(bb, anim):
+    names = {}
+    if anim:
+        for uid, a in anim.get("animators", {}).items():
+            if a.get("name"):
+                names[uid] = a["name"]
+    counter = [0]
 
-def rot_mat(rx, ry, rz):
-    """Rz·Ry·Rx 复合前的 Rx·Ry·Rz（与 MC rotationZYX 一致）。输入弧度。"""
-    cX, sX, cY, sY, cZ, sZ = math.cos(rx), math.sin(rx), math.cos(ry), math.sin(ry), math.cos(rz), math.sin(rz)
-    Rx = [[1, 0, 0], [0, cX, -sX], [0, sX, cX]]
-    Ry = [[cY, 0, sY], [0, 1, 0], [-sY, 0, cY]]
-    Rz = [[cZ, -sZ, 0], [sZ, cZ, 0], [0, 0, 1]]
-
-    def mul(A, B):
-        return [[sum(A[i][k] * B[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
-    return mul(Rx, mul(Ry, Rz))
-
-
-def apply(R, p):
-    return [sum(R[i][k] * p[k] for k in range(3)) for i in range(3)]
-
-
-def corners(x, y, z, dx, dy, dz):
-    return [(x + a * dx, y + b * dy, z + c * dz) for a in (0, 1) for b in (0, 1) for c in (0, 1)]
-
-
-def aabb(pts):
-    return ([min(p[i] for p in pts) for i in range(3)],
-            [max(p[i] for p in pts) for i in range(3)])
-
-
-def load():
-    with open(BB_PATH, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def convert(bb):
-    """返回 (body_cube, plain, rotated)。全部坐标已相对 BODY_PIVOT。"""
-    body_cube = None
-    plain, rotated = [], []
+    def walk(nodes):
+        for it in nodes:
+            if isinstance(it, dict):
+                if not it.get("name"):
+                    it["name"] = names.get(it.get("uuid")) or ("group_%d" % counter[0])
+                    counter[0] += 1
+                it.setdefault("origin", [0, 0, 0])
+                it.setdefault("rotation", [0, 0, 0])
+                walk(it.get("children", []))
+    walk(bb["outliner"])
+    # 带旋转的那个 8x12x4 "body" 其实是苦力怕躯干，与海豚身体重名 → 改名
     for el in bb["elements"]:
-        frm, to = el["from"], el["to"]
-        dx, dy, dz = to[0] - frm[0], to[1] - frm[1], to[2] - frm[2]
-        tex = tuple(el.get("uv_offset") or [0, 0])
-        mir = bool(el.get("mirror_uv"))
         rot = el.get("rotation") or [0, 0, 0]
-        co = el.get("origin") or [0, 0, 0]
-        name = el["name"]
-        # 立方体世界最小角（java）
-        abs_min = (-to[0], 24.0 - to[1], frm[2])
-        if any(abs(v) > 1e-6 for v in rot):
-            abs_piv = (-co[0], 24.0 - co[1], co[2])
-            local_min = (co[0] - to[0], co[1] - to[1], frm[2] - co[2])
-            jrot = (-rad(rot[0]), -rad(rot[1]), rad(rot[2]))
-            rel_piv = tuple(abs_piv[i] - BODY_PIVOT[i] for i in range(3))
-            if name == "body":
-                name = "creeper_torso"
-            rotated.append(dict(name=name, min=local_min, size=(dx, dy, dz),
-                                tex=tex, mir=mir, rot=jrot, piv=rel_piv))
-        else:
-            rel_min = tuple(abs_min[i] - BODY_PIVOT[i] for i in range(3))
-            if name == "body":
-                body_cube = dict(min=rel_min, size=(dx, dy, dz), tex=tex, mir=mir)
-            else:
-                plain.append(dict(name=name, min=rel_min, size=(dx, dy, dz), tex=tex, mir=mir))
-    return body_cube, plain, rotated
+        if el["name"] == "body" and any(abs(v) > 1e-6 for v in rot):
+            el["name"] = "creeper_torso"
 
 
-def verify(bb, body_cube, plain, rotated):
-    """逐立方体把 Java 世界 AABB 与 Blockbench 世界 AABB 对照。"""
-    print("=== 逐立方体世界 AABB 交叉验证 ===")
-    # java 世界 AABB（plain 的 min 是相对 body 轴心的，要加回轴心才是世界坐标）
-    def world_min(m):
-        return [m[i] + BODY_PIVOT[i] for i in range(3)]
+# --------------------------------------------------------------------------
+# 2. 逐立方体「带标记角点」交叉验证（能识别 ±90° 的旋转方向错误）
+# --------------------------------------------------------------------------
+# 约定：bb 角点索引 (i,j,k) ↔ java 角点索引 (1-i, 1-j, k)
+#   java_x = -bb_x  → bb x_min 对应 java x_max
+#   java_y = 24-bb_y → bb y_min 对应 java y_max
+#   java_z = +bb_z  → 索引不变
 
-    java = {}
-    if body_cube:
-        java["body"] = aabb(corners(*(world_min(body_cube["min"]) + list(body_cube["size"]))))
-    for p in plain:
-        java[p["name"]] = aabb(corners(*(world_min(p["min"]) + list(p["size"]))))
-    for r in rotated:
-        R = rot_mat(*r["rot"])
-        base = [r["piv"][i] + BODY_PIVOT[i] for i in range(3)]  # 轴心的世界坐标
-        pts = []
-        for c in corners(*(list(r["min"]) + list(r["size"]))):
-            q = apply(R, c)
-            pts.append([q[i] + base[i] for i in range(3)])
-        java[r["name"]] = aabb(pts)
+def _rotm(rx, ry, rz):
+    return G._rotm(rx, ry, rz)
 
-    # bb 世界 AABB
-    bb_map = {}
-    for el in bb["elements"]:
-        frm, to = el["from"], el["to"]
-        nm = el["name"]
-        if nm == "body" and any(abs(v) > 1e-6 for v in (el.get("rotation") or [0, 0, 0])):
-            nm = "creeper_torso"
-        co = el.get("origin") or [0, 0, 0]
-        rot = el.get("rotation") or [0, 0, 0]
-        pts = corners(frm[0], frm[1], frm[2], to[0] - frm[0], to[1] - frm[1], to[2] - frm[2])
-        if any(abs(v) > 1e-6 for v in rot):
-            R = rot_mat(*[rad(v) for v in rot])
-            pts = [[apply(R, [p[i] - co[i] for i in range(3)])[i] + co[i] for i in range(3)] for p in pts]
-        bb_map[nm] = aabb(pts)
+
+def _apply(R, p):
+    return G._apply(R, p)
+
+
+def verify(bb, parts):
+    by_uuid = {e["uuid"]: e for e in bb["elements"]}
+    groups = {}
+    for name, g in [(p["name"], p) for p in parts]:
+        pass
+    # group 原点（预处理后都存在）
+    gorigin = {}
+
+    def walk(nodes):
+        for it in nodes:
+            if isinstance(it, dict):
+                gorigin[it["name"]] = it.get("origin") or [0, 0, 0]
+                walk(it.get("children", []))
+    walk(bb["outliner"])
+
+    f_of = G.java_transforms(parts)
+    by_name = {p["name"]: p for p in parts}
 
     worst = 0.0
-    for nm, (blo, bhi) in bb_map.items():
-        if nm not in java:
-            print("  !! Java 缺失", nm)
-            continue
-        jlo, jhi = java[nm]
-        exp_lo = [-bhi[0], 24.0 - bhi[1], blo[2]]
-        exp_hi = [-blo[0], 24.0 - blo[1], bhi[2]]
-        d = max(abs(a - b) for a, b in zip(jlo + jhi, exp_lo + exp_hi))
-        worst = max(worst, d)
-        print("  %-16s 偏差 %.2e %s" % (nm, d, "OK" if d < 1e-4 else "!! 不一致"))
-    print("  最大偏差 %.2e => %s" % (worst, "全部通过" if worst < 1e-4 else "**失败**"))
-    return worst < 1e-4
+    print("=== 逐立方体「角点」交叉验证 ===")
+    for p in parts:
+        f_par = f_of(p["name"])
+        for sub, box, tex, mir, rot, rel in p["cubes"]:
+            use = G._cube_transform(f_par, sub, rel, rot)
+            dx, dy, dz = box[3], box[4], box[5]
+            # 找到这个立方体在 bb 里的原始元素
+            el = None
+            for e in bb["elements"]:
+                if e["name"] == (sub[:-6] if (sub and sub.endswith("_pivot")) else p["name"]):
+                    el = e
+                    break
+            if el is None:
+                continue
+            co = el.get("origin") or [0, 0, 0]
+            crot = el.get("rotation") or [0, 0, 0]
+            Rc = _rotm(*[math.radians(v) for v in crot])
+            frm, to = el["from"], el["to"]
+            cdx, cdy, cdz = to[0] - frm[0], to[1] - frm[1], to[2] - frm[2]
+            for i in (0, 1):
+                for j in (0, 1):
+                    for k in (0, 1):
+                        vbb = [frm[0] + i * cdx, frm[1] + j * cdy, frm[2] + k * cdz]
+                        q = _apply(Rc, [vbb[0] - co[0], vbb[1] - co[1], vbb[2] - co[2]])
+                        wbb = [q[0] + co[0], q[1] + co[1], q[2] + co[2]]
+                        exp = [-wbb[0], 24.0 - wbb[1], wbb[2]]
+                        a, b, c = 1 - i, 1 - j, k
+                        vj = [box[0] + a * dx, box[1] + b * dy, box[2] + c * dz]
+                        wj = use(vj)
+                        d = max(abs(wj[n] - exp[n]) for n in range(3))
+                        worst = max(worst, d)
+    ok = worst < 1e-4
+    print("  所有立方体×8 角点，最大偏差 %.2e => %s" % (worst, "全部通过" if ok else "**失败**"))
+    return ok
 
+
+# --------------------------------------------------------------------------
+# 3. 生成 Java
+# --------------------------------------------------------------------------
 
 def fl(v):
     if abs(v) < 1e-7:
@@ -169,9 +146,40 @@ def fl(v):
     return s + "F"
 
 
-def emit(body_cube, plain, rotated):
-    L = []
-    a = L.append
+def camel(n):
+    p = n.split("_")
+    return p[0] + "".join(w.capitalize() for w in p[1:])
+
+
+def emit(parts, anim):
+    fields = []          # [(fieldName, parentField or None, partName)]
+    by_name = {p["name"]: p for p in parts}
+    children = {}
+    for p in parts:
+        children.setdefault(p["parent"], []).append(p)
+
+    out = []
+    a = out.append
+
+    # 只给「需要单独引用的部件」建字段：动画驱动到的 + 它们的父链 + root/body
+    needed = {"root"}
+    for p in parts:
+        if p["parent"] is None:
+            needed.add(p["name"])
+    anim_bones = set()
+    if anim:
+        for uid, an in anim.get("animators", {}).items():
+            if any(k.get("channel") == "rotation" and k.get("data_points") for k in an.get("keyframes", [])):
+                anim_bones.add(an.get("name"))
+    for n in anim_bones:
+        cur = n
+        while cur and cur in by_name:
+            needed.add(cur)
+            cur = by_name[cur]["parent"]
+    # 稳住顺序：按层级
+    ordered = sorted([p["name"] for p in parts if p["name"] in needed],
+                     key=lambda n: _depth(n, by_name))
+
     a("package com.hybridcreeper.client.model;")
     a("")
     a("import com.hybridcreeper.HybridCreeper;")
@@ -193,97 +201,101 @@ def emit(body_cube, plain, rotated):
     a(" *")
     a(" * <p><b>本文件由工具自动生成</b>（{@code vanilla-reference/tools/gen_water_creeper_model.py}），")
     a(" * 源工程是 Blockbench 文件 {@code creeperdolphin.bbmodel}（64×64 贴图）。")
-    a(" * 要改模型请改 .bbmodel 后重跑生成器，不要手改这里。</p>")
+    a(" * 要改模型/动画请改 .bbmodel 后重跑生成器，不要手改这里。</p>")
     a(" *")
-    a(" * <h2>坐标换算</h2>")
-    a(" * <pre>")
-    a(" *   java = ( -bb.x , 24 - bb.y , bb.z )")
-    a(" *   PartPose.offset = 轴心世界坐标 - 父级轴心世界坐标")
-    a(" *   addBox(x,y,z,dx,dy,dz) : (x,y,z) = 立方体世界最小角 - 部件轴心世界坐标")
-    a(" *   旋转 java = ( -rad(rx) , -rad(ry) , +rad(rz) )")
-    a(" * </pre>")
-    a(" * 生成器对每个立方体做了世界 AABB 交叉验证（最大偏差 ~1e-15）。")
+    a(" * <h2>部件层级</h2>")
+    a(" * <p>本文件<b>按 .bbmodel 的骨头层级 1:1 生成</b>（每个 group 一个部件），")
+    a(" * 这样 .bbmodel 里的动画（animator 按骨头 uuid 索引）能直接落到对应部件上。</p>")
+    a(" * <p><b>注意</b>：部件 {@code tail} 的 uuid 继承自原版海豚的尾巴骨头，")
+    a(" * 但在这个模型里它装的是<b>四条腿</b> —— 名字保持与 Blockbench 工程一致，别被名字骗了。</p>")
     a(" *")
-    a(" * <h2>为什么 body 轴心是 (0, 22, -5)</h2>")
-    a(" * <p>与 {@code DolphinModel} 的 body 完全一致 —— 这样海豚身体立方体")
-    a(" * 的 {@code addBox} 调用逐字相同，水中摆尾动画也能直接照搬。</p>")
-    a(" *")
-    a(" * <h2>旋转的立方体被提成了独立部件</h2>")
-    a(" * <p>原版模型系统不支持立方体级旋转（{@code addBox} 没有旋转参数），")
-    a(" * 所以苦力怕躯干 + 四条腿这几个带旋转的立方体，各自被提成了一个")
-    a(" * 独立子部件，把旋转搬到 {@code PartPose} 上。</p>")
+    a(" * <h2>动画</h2>")
+    a(" * <p>{@link #setupAnim} 直接回放 .bbmodel 里 {@code swim} 动画的关键帧曲线")
+    a(" * （线性插值），角度按 {@code java = -rad(bb)} 换算。</p>")
     a(" */")
     a("public class WaterCreeperModel extends HierarchicalModel<WaterCreeperEntity> {")
     a("")
-    a("    /**")
-    a("     * 模型图层。路径是本模组自己的命名空间（{@code hybridcreeper:water_creeper}），")
-    a("     * <b>不会</b>和原版的 {@code minecraft:dolphin} 图层撞车 ——")
-    a("     * 原版海豚继续用它自己那份模型。")
-    a("     */")
+    a("    /** 模型图层：本模组私有命名空间，不会和原版 {@code minecraft:dolphin} 撞车。 */")
     a("    public static final ModelLayerLocation LAYER = new ModelLayerLocation(")
     a("            ResourceLocation.fromNamespaceAndPath(HybridCreeper.MODID, \"water_creeper\"), \"main\");")
     a("")
     a("    private static final CubeDeformation DEFORM = CubeDeformation.NONE;")
+    a("    private static final float DEG2RAD = 0.017453292F;")
     a("")
     a("    private final ModelPart root;")
-    a("    private final ModelPart body;")
-    names = [r["name"] for r in rotated] + [p["name"] for p in plain]
-    field = {"creeper_torso": "creeperTorso", "back_fin": "backFin", "left_fin": "leftFin",
-             "right_fin": "rightFin", "head": "head",
-             "left_hind_leg": "leftHindLeg", "right_hind_leg": "rightHindLeg",
-             "right_front_leg": "rightFrontLeg", "left_front_leg": "leftFrontLeg"}
-    # 腿的静态 xRot（来自 PartPose）—— 动画必须基于它做「绝对赋值」
-    legx = {r["name"]: r["rot"][0] for r in rotated}
-    hind_x = legx.get("left_hind_leg", 0.0)
-    front_x = legx.get("left_front_leg", 0.0)
-    for n in ["head"] + [r["name"] for r in rotated] + [p["name"] for p in plain if p["name"] != "head"]:
-        a("    private final ModelPart %s;" % field[n])
+    for n in ordered:
+        if n == "root":
+            continue
+        a("    private final ModelPart %s;" % camel(n))
     a("")
-
-    def cube_line(minv, size, tex, mir):
-        return ("                CubeListBuilder.create().texOffs(%d, %d)%s.addBox(%s, %s, %s, %s, %s, %s, DEFORM)"
-                % (tex[0], tex[1], ".mirror()" if mir else "",
-                   fl(minv[0]), fl(minv[1]), fl(minv[2]),
-                   fl(size[0]), fl(size[1]), fl(size[2])))
-
-    # 构造函数
-    a("    public %s(ModelPart root) {" % "WaterCreeperModel")
+    a("    public WaterCreeperModel(ModelPart root) {")
     a("        this.root = root;")
-    a("        this.body = root.getChild(\"body\");")
-    a("        this.head = this.body.getChild(\"head\");")
-    for r in rotated:
-        a("        this.%s = this.body.getChild(\"%s\");" % (field[r["name"]], r["name"]))
-    for p in plain:
-        if p["name"] != "head":
-            a("        this.%s = this.body.getChild(\"%s\");" % (field[p["name"]], p["name"]))
+    for n in ordered:
+        if n == "root":
+            continue
+        p = by_name[n]
+        par = p["parent"]
+        src = "root" if par is None else ("this." + camel(par))
+        a("        this.%s = %s.getChild(\"%s\");" % (camel(n), src, n))
     a("    }")
     a("")
-    # createBodyLayer
+
+    # ---- createBodyLayer ----
     a("    public static LayerDefinition createBodyLayer() {")
     a("        MeshDefinition mesh = new MeshDefinition();")
     a("        PartDefinition root = mesh.getRoot();")
     a("")
-    a("        // 海豚身体（与 DolphinModel 逐字一致），也是动画容器")
-    a("        PartDefinition body = root.addOrReplaceChild(\"body\",")
-    a(cube_line(body_cube["min"], body_cube["size"], body_cube["tex"], body_cube["mir"]) + ",")
-    a("                PartPose.offset(%s, %s, %s));" % (fl(BODY_PIVOT[0]), fl(BODY_PIVOT[1]), fl(BODY_PIVOT[2])))
-    a("")
-    # plain cubes
-    order = {"back_fin": 0, "left_fin": 1, "right_fin": 2, "head": 3}
-    for p in sorted(plain, key=lambda x: order.get(x["name"], 9)):
-        a("        body.addOrReplaceChild(\"%s\"," % p["name"])
-        a(cube_line(p["min"], p["size"], p["tex"], p["mir"]) + ",")
-        a("                PartPose.offset(%s, %s, %s));" % tuple(fl(v) for v in p["min"]))
+
+    used_vars = set()
+
+    def varof(n):
+        v = "_" + n
+        while v in used_vars:
+            v += "_"
+        used_vars.add(v)
+        return v
+
+    def pose(prefix, piv, rot):
+        if any(abs(v) > 1e-7 for v in rot):
+            return "%s.offsetAndRotation(%s, %s, %s, %s, %s, %s)" % (
+                prefix, fl(piv[0]), fl(piv[1]), fl(piv[2]), fl(rot[0]), fl(rot[1]), fl(rot[2]))
+        return "%s.offset(%s, %s, %s)" % (prefix, fl(piv[0]), fl(piv[1]), fl(piv[2]))
+
+    def cube_call(box, tex, mir):
+        return "CubeListBuilder.create().texOffs(%d, %d)%s.addBox(%s, %s, %s, %s, %s, %s, DEFORM)" % (
+            tex[0], tex[1], ".mirror()" if mir else "",
+            fl(box[0]), fl(box[1]), fl(box[2]), fl(box[3]), fl(box[4]), fl(box[5]))
+
+    def emit_part(p, parent_expr):
+        v = varof(p["name"])
+        plain = [c for c in p["cubes"] if c[0] is None]
+        a("        PartDefinition %s = %s.addOrReplaceChild(\"%s\"," % (v, parent_expr, p["name"]))
+        if plain:
+            a("                CubeListBuilder.create()")
+            for sub, box, tex, mir, _r, _rel in plain:
+                a("                        .texOffs(%d, %d)%s.addBox(%s, %s, %s, %s, %s, %s, DEFORM)"
+                  % (tex[0], tex[1], ".mirror()" if mir else "",
+                     fl(box[0]), fl(box[1]), fl(box[2]), fl(box[3]), fl(box[4]), fl(box[5])))
+            a("                , %s);" % pose("PartPose", p["pivot"], p["rot"]))
+        else:
+            a("                CubeListBuilder.create(),")
+            a("                %s);" % pose("PartPose", p["pivot"], p["rot"]))
         a("")
-    # rotated subparts
-    for r in rotated:
-        a("        // ↓ 原立方体带旋转，已提成独立子部件")
-        a("        body.addOrReplaceChild(\"%s\"," % r["name"])
-        a(cube_line(r["min"], r["size"], r["tex"], r["mir"]) + ",")
-        a("                PartPose.offsetAndRotation(%s, %s, %s, %s, %s, %s));"
-          % (fl(r["piv"][0]), fl(r["piv"][1]), fl(r["piv"][2]),
-             fl(r["rot"][0]), fl(r["rot"][1]), fl(r["rot"][2])))
-        a("")
+        for sub, box, tex, mir, rot_c, rel in p["cubes"]:
+            if sub is None:
+                continue
+            nm = sub[:-6] if sub.endswith("_pivot") else sub
+            a("        // ↓ 原立方体带旋转，提成独立子部件")
+            a("        %s.addOrReplaceChild(\"%s\"," % (v, nm))
+            a("                %s," % cube_call(box, tex, mir))
+            a("                %s);" % pose("PartPose", rel, rot_c))
+            a("")
+        for ch in children.get(p["name"], []):
+            emit_part(ch, v)
+
+    for p in children.get(None, []):
+        emit_part(p, "root")
+
     a("        return LayerDefinition.create(mesh, 64, 64);")
     a("    }")
     a("")
@@ -292,47 +304,97 @@ def emit(body_cube, plain, rotated):
     a("        return this.root;")
     a("    }")
     a("")
+
+    # ---- 动画 ----
+    if anim:
+        emit_anim(a, anim, by_name, camel)
+
+    a("}")
+    return "\n".join(out)
+
+
+def _depth(n, by_name):
+    d, cur = 0, by_name[n]
+    while cur["parent"]:
+        d += 1
+        cur = by_name[cur["parent"]]
+    return d
+
+
+def emit_anim(a, anim, by_name, camel):
+    length = float(anim.get("length") or 0.0)
+    loop_ticks = length * FPS
+    curves = []   # (boneName, fieldName, times, xs, ys, zs)
+    for uid, an in anim.get("animators", {}).items():
+        bone = an.get("name")
+        kfs = [k for k in an.get("keyframes", []) if k.get("channel") == "rotation" and k.get("data_points")]
+        if not kfs:
+            continue
+        if bone not in by_name:
+            print("  (跳过动画骨头 %s：模型里没有)" % bone)
+            continue
+        kfs.sort(key=lambda k: k["time"])
+        times = [float(k["time"]) for k in kfs]
+
+        def comp(i):
+            return [float(k["data_points"][0][i]) for k in kfs]
+        curves.append((bone, camel(bone), times, comp("x"), comp("y"), comp("z")))
+
+    a("    /* ---------------- swim 动画（由 .bbmodel 关键帧导出） ---------------- */")
+    a("")
+    a("    /** 一个循环的时长（tick）= length(秒) × 20。 */")
+    a("    private static final float SWIM_LOOP_TICKS = %s;" % fl(loop_ticks))
+    for bone, fld, times, xs, ys, zs in curves:
+        a("")
+        a("    private static final float[] %s_T = {%s};" % (fld.upper(), ", ".join(fl(t) for t in times)))
+        a("    private static final float[] %s_X = {%s};" % (fld.upper(), ", ".join(fl(v) for v in xs)))
+        if any(abs(v) > 1e-7 for v in ys):
+            a("    private static final float[] %s_Y = {%s};" % (fld.upper(), ", ".join(fl(v) for v in ys)))
+        if any(abs(v) > 1e-7 for v in zs):
+            a("    private static final float[] %s_Z = {%s};" % (fld.upper(), ", ".join(fl(v) for v in zs)))
+    a("")
     a("    /**")
-    a("     * 水中游动动画 —— 逐字沿用原版 {@code DolphinModel#setupAnim}：")
-    a("     * 身体的俯仰/偏航跟随头部朝向，游动时（有水平位移）叠加一段")
-    a("     * 摆尾级联振荡。苦力怕的躯干与四条腿挂在 body 上，会跟着一起晃。")
+    a("     * 水中游动：直接回放 .bbmodel 的 swim 曲线（线性插值）。")
+    a("     * 角度是 Blockbench 约定（度），Java 侧按 {@code xRot = -rad(bb)} 换算。")
     a("     */")
     a("    @Override")
     a("    public void setupAnim(WaterCreeperEntity entity, float limbSwing, float limbSwingAmount,")
     a("                          float ageInTicks, float netHeadYaw, float headPitch) {")
-    a("        this.body.xRot = headPitch * (float) (Math.PI / 180.0);")
-    a("        this.body.yRot = netHeadYaw * (float) (Math.PI / 180.0);")
-    a("        // 腿的静态角度来自 PartPose，每帧必须「绝对赋值」——")
-    a("        // ModelPart 的旋转不会自动复位，用 += 会逐帧累加转飞。")
-    a("        float hind = %s;" % fl(hind_x))
-    a("        float front = %s;" % fl(front_x))
-    a("        if (entity.getDeltaMovement().horizontalDistanceSqr() > 1.0E-7) {")
-    a("            this.body.xRot += -0.05F - 0.05F * Mth.cos(ageInTicks * 0.3F);")
-    a("            // 四条腿随游动轻轻划水（幅度很小，别抢戏）")
-    a("            float swing = Mth.cos(ageInTicks * 0.3F) * 0.15F;")
-    a("            hind += swing;")
-    a("            front -= swing;")
-    a("        }")
-    a("        this.leftHindLeg.xRot = hind;")
-    a("        this.rightHindLeg.xRot = hind;")
-    a("        this.leftFrontLeg.xRot = front;")
-    a("        this.rightFrontLeg.xRot = front;")
+    a("        float t = (ageInTicks % SWIM_LOOP_TICKS) / 20.0F;")
+    for bone, fld, times, xs, ys, zs in curves:
+        a("        this.%s.xRot = -sample(%s_T, %s_X, t) * DEG2RAD;" % (fld, fld.upper(), fld.upper()))
+        if any(abs(v) > 1e-7 for v in ys):
+            a("        this.%s.yRot = -sample(%s_T, %s_Y, t) * DEG2RAD;" % (fld, fld.upper(), fld.upper()))
+        if any(abs(v) > 1e-7 for v in zs):
+            a("        this.%s.zRot = sample(%s_T, %s_Z, t) * DEG2RAD;" % (fld, fld.upper(), fld.upper()))
     a("    }")
-    a("}")
-    return "\n".join(L)
+    a("")
+    a("    /** 在关键帧时间轴上做线性插值。 */")
+    a("    private static float sample(float[] times, float[] values, float t) {")
+    a("        int last = times.length - 1;")
+    a("        if (t <= times[0]) return values[0];")
+    a("        if (t >= times[last]) return values[last];")
+    a("        for (int i = 1; i <= last; i++) {")
+    a("            if (t <= times[i]) {")
+    a("                float f = (t - times[i - 1]) / (times[i] - times[i - 1]);")
+    a("                return Mth.lerp(f, values[i - 1], values[i]);")
+    a("            }")
+    a("        }")
+    a("        return values[last];")
+    a("    }")
+    a("")
 
 
 def main():
-    bb = load()
-    tw = bb["resolution"]["width"]
-    th = bb["resolution"]["height"]
-    print("模型 %s  %d 个立方体  纹理 %dx%d" % (bb.get("name"), len(bb["elements"]), tw, th))
-    body_cube, plain, rotated = convert(bb)
-    ok = verify(bb, body_cube, plain, rotated)
-    if not ok:
-        print("!! 校验未通过，已停止生成")
-        sys.exit(1)
-    java = emit(body_cube, plain, rotated)
+    with open(BB_PATH, encoding="utf-8") as f:
+        bb = json.load(f)
+    anim = (bb.get("animations") or [None])[0]
+    prep(bb, anim)
+    print("模型 %s  %d 个立方体  %d 段动画" % (bb.get("name"), len(bb["elements"]), len(bb.get("animations") or [])))
+    parts = G.to_parts(bb)
+    if not verify(bb, parts):
+        raise SystemExit("!! 校验未通过，已停止生成")
+    java = emit(parts, anim)
     with open(OUT_JAVA, "w", encoding="utf-8") as f:
         f.write(java)
     print("\nJava 源码草稿:", OUT_JAVA)

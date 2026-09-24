@@ -8,6 +8,33 @@
 
 ---
 
+## [1.5.0] — 2026-09-24
+
+### 新增
+
+- **水下苦力怕的游动动画**：直接采用 Blockbench 工程 `creeperdolphin.bbmodel`
+  里的 `swim` 动画，由生成器把关键帧曲线导出成 `setupAnim`
+  （线性插值，角度按 `java = -rad(bb)` 换算）。
+  一个循环 = 1.0472 秒（20.944 tick），身体轻摆 + 四条腿划水，首尾相等、循环无缝。
+  改动画只需改 `.bbmodel` 后重跑生成器。
+
+### 修复
+
+- **背鳍错位**：上一版的背鳍是平的（`.bbmodel` 里没给旋转），
+  贴在躯干上像一块错位的方块。现背鳍带 −50° 旋转，与 Blockbench 完全一致。
+- **模型层级改为与 Blockbench 骨头 1:1**：每个 group 生成一个部件，
+  这样 `.bbmodel` 的动画（animator 按骨头 uuid 索引）能直接落到对应部件上。
+- 校验升级为**逐立方体 ×8 角点**交叉验证（能识别 ±90° 旋转的方向错误），
+  10 个立方体最大偏差 3.55e-15。
+
+### 说明
+
+- 部件名沿用 Blockbench 工程：`tail` 这个骨头（uuid 继承自原版海豚的尾巴）
+  在本模型里装的是**四条腿** —— 名字保持不变，免得和工程脱节。
+- 本版取代 1.4.0 里"沿用原版海豚动画"的做法。
+
+---
+
 ## [1.4.0] — 2026-09-24
 
 ### 变更
@@ -162,6 +189,7 @@
 
 ---
 
+[1.5.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.0
 [1.4.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.4.0
 [1.3.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.1
 [1.3.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.0
