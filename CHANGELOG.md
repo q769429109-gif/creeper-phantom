@@ -8,6 +8,25 @@
 
 ---
 
+## [1.5.2] — 2026-09-24
+
+### 修复
+
+- **左右胸鳍长到背上了**：`.bbmodel` 里两片胸鳍的 **rotation 丢失**
+  （origin 还在），于是它们没被甩到身体两侧，而是卡在躯干宽度以内、
+  从躯干顶部戳出去 —— 看着就像长在背上。
+  已把原版海豚的旋转补回立方体上：
+  `left_fin` → `[-60, 0, 120]`、`right_fin` → `[-60, 0, -120]`。
+  现在两片胸鳍的世界坐标与原版海豚**逐位一致**（x 伸到 ±5.71，超出躯干的 ±4）。
+
+### 说明
+
+- 同类问题的通用判断法：**分组/立方体的 `origin` 和 `rotation` 是两件事**，
+  只继承 origin 而丢掉 rotation，部件的位置看着"差不多"、姿态却是错的。
+  转换后建议把每个立方体的世界 AABB 与原版对照。
+
+---
+
 ## [1.5.1] — 2026-09-24
 
 ### 修复
@@ -203,6 +222,7 @@
 
 ---
 
+[1.5.2]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.2
 [1.5.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.1
 [1.5.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.0
 [1.4.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.4.0

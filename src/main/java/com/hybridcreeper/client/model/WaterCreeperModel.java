@@ -73,14 +73,22 @@ public class WaterCreeperModel extends HierarchicalModel<WaterCreeperEntity> {
                 PartPose.offsetAndRotation(0.0F, 0.1388F, -6.9199F, 0.8727F, 0.0F, 0.0F));
 
         PartDefinition _left_fin = _body.addOrReplaceChild("left_fin",
-                CubeListBuilder.create()
-                        .texOffs(48, 20).mirror().addBox(1.5F, -8.0F, -1.0F, 1.0F, 4.0F, 7.0F, DEFORM)
-                , PartPose.offset(0.0F, 0.0F, 0.0F));
+                CubeListBuilder.create(),
+                PartPose.offset(0.0F, 0.0F, 0.0F));
+
+        // ↓ 原立方体带旋转，提成独立子部件
+        _left_fin.addOrReplaceChild("left_fin",
+                CubeListBuilder.create().texOffs(48, 20).mirror().addBox(-0.5F, -4.0F, 0.0F, 1.0F, 4.0F, 7.0F, DEFORM),
+                PartPose.offsetAndRotation(2.0F, -4.0F, -1.0F, 1.0472F, 0.0F, 2.0944F));
 
         PartDefinition _right_fin = _body.addOrReplaceChild("right_fin",
-                CubeListBuilder.create()
-                        .texOffs(48, 20).addBox(-2.5F, -8.0F, -1.0F, 1.0F, 4.0F, 7.0F, DEFORM)
-                , PartPose.offset(0.0F, 0.0F, 0.0F));
+                CubeListBuilder.create(),
+                PartPose.offset(0.0F, 0.0F, 0.0F));
+
+        // ↓ 原立方体带旋转，提成独立子部件
+        _right_fin.addOrReplaceChild("right_fin",
+                CubeListBuilder.create().texOffs(48, 20).addBox(-0.5F, -4.0F, 0.0F, 1.0F, 4.0F, 7.0F, DEFORM),
+                PartPose.offsetAndRotation(-2.0F, -4.0F, -1.0F, 1.0472F, 0.0F, -2.0944F));
 
         PartDefinition _tail = _body.addOrReplaceChild("tail",
                 CubeListBuilder.create(),
