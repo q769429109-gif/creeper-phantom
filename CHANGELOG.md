@@ -8,6 +8,45 @@
 
 ---
 
+## [1.9.1] — 2026-09-24
+
+### 修复
+
+- **启动崩溃：`Cannot get config value before config is loaded.`**
+  - 1.9.0 把属性数值改成读配置之后，游戏**在模组加载阶段就崩**：日志刷满
+    `Cowardly refusing to send event … to a broken mod state`，
+    崩溃报告 `crash-*-fml.txt` 直接点名 `WaterCreeperEntity.createAttributes`。
+  - 根因：`createAttributes()` 是在 `EntityAttributeCreationEvent` 里被调用的，
+    而该事件由 `GameData#postRegisterEvents → CommonHooks#modifyAttributes`
+    在**注册表后期**抛出 —— **早于 `ModConfigSpec` 加载**。
+    在那一刻读配置必然抛 `IllegalStateException`，并把整个模组状态打成 broken。
+  - 修复：`createAttributes()` 内恢复写死默认值（与配置默认值保持一致）；
+    配置里的真值改由新增的 `applyConfiguredAttributes()` 在**实体构造时**写入
+    （构造函数即"实体生成时"，配置早已就绪），并在改完生命上限后重设满血。
+  - 副作用（已同步写进配置文件注释）：**改配置只对之后新生成的个体生效**，
+    存档里已有的个体保留自己的数值；重新刷一只即可看到新数值。
+
+## [1.9.0] — 2026-09-24
+
+### 新增
+
+- **苦力怕海豚的全部参数搬进配置文件**：新增 `[waterCreeper]` 段
+  （下辖 `.attributes` / `.explosion` / `.ai` / `.ram`），共 17 项可调 ——
+  `explode` / `naturalSpawn` / `maxHealth` / `attackDamage` / `movementSpeed` /
+  `swimSpeed` / `followRange` / `knockbackResistance` / `explosionPower` /
+  `destroyBlocks` / `setFire` / `damageMultiplier` / `fuseTicks` /
+  `chargedMultiplier` / `swellRange` / `beachAssault` / `ramCooldownTicks`。
+
+### 变更
+
+- `HybridCreeperExplosionCalculator` 由「苦力怕幻翼专用」改为**两只生物共用**
+  （`hitTarget` 加判空保护）。
+- README「配置」章节重写：新增「想调什么 → 改哪一项」对照表，
+  并删掉已过时的「苦力怕海豚不读配置文件」一句。
+- 各项默认值与原本的硬编码值一一对应，不动配置文件即维持原手感。
+
+> ⚠️ **1.9.0 存在启动崩溃**（原因与修复见 [1.9.1]），请直接使用 **1.9.1**。
+
 ## [1.8.0] — 2026-09-24
 
 ### 变更
@@ -332,6 +371,8 @@ checkSpawnObstruction / checkSpawnPosition / noCollision` 全 `true`。
 
 ---
 
+[1.9.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.9.1
+[1.9.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.9.0
 [1.8.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.8.0
 [1.7.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.1
 [1.7.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.0

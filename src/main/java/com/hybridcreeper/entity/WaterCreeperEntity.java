@@ -5,6 +5,7 @@ import com.hybridcreeper.ai.WaterCreeperSwellGoal;
 import com.hybridcreeper.ai.WaterCreeperChaseGoal;
 import com.hybridcreeper.config.HybridCreeperConfig;
 import com.hybridcreeper.explosion.HybridCreeperExplosionCalculator;
+import net.minecraft.core.Holder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -19,6 +20,8 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.SmoothSwimmingLookControl;
@@ -136,11 +139,55 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
         this.maxSwell = HybridCreeperConfig.WATER_CREEPER_FUSE_TICKS.get();
         this.explosionRadius = (int) Math.round(HybridCreeperConfig.WATER_CREEPER_EXPLOSION_POWER.get());
 
+        // 属性数值同样来自配置，**必须在这里读**：
+        // 构造函数是"实体生成时"执行的，配置早已加载完；
+        // 而 createAttributes() 跑在配置加载之前，在那里读会直接崩游戏（见该方法的注释）。
+        this.applyConfiguredAttributes();
+
         // 移动与视线：直接采用原版海豚那一套参数（85 / 10 是转向上限，
         // 0.02F 是水中加速度，0.1F 是出水后的加速度，最后一项开启重力辅助）。
         // 海豚是原版唯一"高速追船"的生物，它的手感参数不值得我另起炉灶。
         this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true);
         this.lookControl = new SmoothSwimmingLookControl(this, 10);
+    }
+
+    /**
+     * 把配置里的属性数值真正写进这只生物 —— 由构造函数调用（即<b>实体生成时</b>）。
+     *
+     * <p>{@link #createAttributes()} 里的常数只是"出厂默认值"，配置的真值在这里覆盖。
+     * 之所以拆成两步，是因为属性表创建得太早（早于配置加载），见
+     * {@link #createAttributes()} 的详细说明。</p>
+     *
+     * <p><b>副作用（已在配置文件的注释里告知用户）</b>：改配置只对之后新生成的个体生效，
+     * 存档里已有的个体保持它自己被同步/存档的数值 —— 属性是每个实体私有的，这里不做回扫。
+     * 想立刻看到效果，重新刷一只即可。</p>
+     */
+    private void applyConfiguredAttributes() {
+        this.applyAttribute(Attributes.MAX_HEALTH,           HybridCreeperConfig.WATER_CREEPER_MAX_HEALTH.get());
+        this.applyAttribute(Attributes.MOVEMENT_SPEED,       HybridCreeperConfig.WATER_CREEPER_MOVEMENT_SPEED.get());
+        this.applyAttribute(Attributes.ATTACK_DAMAGE,        HybridCreeperConfig.WATER_CREEPER_ATTACK_DAMAGE.get());
+        this.applyAttribute(Attributes.FOLLOW_RANGE,         HybridCreeperConfig.WATER_CREEPER_FOLLOW_RANGE.get());
+        this.applyAttribute(Attributes.KNOCKBACK_RESISTANCE, HybridCreeperConfig.WATER_CREEPER_KNOCKBACK_RESISTANCE.get());
+        // 水里速度 = 0.02 × 本值（倍数语义见 createAttributes 里的注释）
+        this.applyAttribute(NeoForgeMod.SWIM_SPEED,          HybridCreeperConfig.WATER_CREEPER_SWIM_SPEED.get());
+
+        // 生命上限被改写后要重新回满 ——
+        // 父类构造里那次 setHealth(getMaxHealth()) 用的还是属性表里的默认上限，已经过时了。
+        this.setHealth(this.getMaxHealth());
+    }
+
+    /**
+     * 改单条属性的基值。
+     *
+     * <p>{@code getAttribute} 正常情况下不会返回 null（属性表里都注册过），
+     * 这里仍然判空：万一将来有人删掉某条属性，也只是那一条不生效，
+     * 而不是让整只生物生成失败。</p>
+     */
+    private void applyAttribute(Holder<Attribute> attribute, double value) {
+        AttributeInstance instance = this.getAttribute(attribute);
+        if (instance != null) {
+            instance.setBaseValue(value);
+        }
     }
 
     /* ------------------------------------------------------------------
@@ -182,11 +229,24 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
      * ------------------------------------------------------------------ */
 
     /**
-     * 属性表。
+     * 属性表 —— <b>这里只能写死常数，绝对不能读配置</b>。
      *
-     * <p><b>全部数值来自配置文件</b> {@code config/hybridcreeper-common.toml} 的
-     * {@code [waterCreeper.attributes]} 段，这里只负责把它们装进属性构建器。
-     * 默认值与原版手感对齐：</p>
+     * <h2>为什么不能读配置（v1.9.0 的启动崩溃事故）</h2>
+     * <p>本方法是在 {@code EntityAttributeCreationEvent} 里被调用的，而那个事件由
+     * {@code GameData#postRegisterEvents → CommonHooks#modifyAttributes} 在
+     * <b>注册表后期</b>抛出 —— <b>比 {@code ModConfigSpec} 加载更早</b>。
+     * 在这里读 {@code HybridCreeperConfig} 会抛：</p>
+     * <pre>
+     *   java.lang.IllegalStateException: Cannot get config value before config is loaded.
+     *     at ModConfigSpec$ConfigValue.get
+     *     at WaterCreeperEntity.createAttributes
+     *     at HybridCreeper.onEntityAttributeCreation
+     * </pre>
+     * <p>后果不是"这一项不生效"，而是<b>模组状态直接被打成 broken</b>、
+     * 游戏在启动阶段就崩（日志里满屏 {@code Cowardly refusing to send event … to a broken mod state}）。</p>
+     *
+     * <p>所以配置里的真值改由 {@link #applyConfiguredAttributes()} 在<b>实体生成时</b>写入 ——
+     * 那时配置早已就绪。下表的常数必须与配置默认值<b>保持一致</b>。</p>
      *
      * <table border="1">
      *   <tr><th>属性</th><th>默认</th><th>配置项</th><th>参照</th></tr>
@@ -201,25 +261,22 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
      *       <td>{@code swimSpeed}</td>
      *       <td><b>管水里</b>。水里速度 = 0.02 × 本值，与 MOVEMENT_SPEED 无关</td></tr>
      * </table>
-     *
-     * <p>⚠️ 注意这个方法是在 {@code EntityAttributeCreationEvent}（注册期）被调用的，
-     * 所以配置必须在那之前已经加载完 —— NeoForge 的 COMMON 配置确实早于它。</p>
      */
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
-                .add(Attributes.MAX_HEALTH, HybridCreeperConfig.WATER_CREEPER_MAX_HEALTH.get())
-                .add(Attributes.MOVEMENT_SPEED, HybridCreeperConfig.WATER_CREEPER_MOVEMENT_SPEED.get())
-                .add(Attributes.ATTACK_DAMAGE, HybridCreeperConfig.WATER_CREEPER_ATTACK_DAMAGE.get())
-                .add(Attributes.FOLLOW_RANGE, HybridCreeperConfig.WATER_CREEPER_FOLLOW_RANGE.get())
-                .add(Attributes.KNOCKBACK_RESISTANCE, HybridCreeperConfig.WATER_CREEPER_KNOCKBACK_RESISTANCE.get())
+                .add(Attributes.MAX_HEALTH, 20.0)
+                .add(Attributes.MOVEMENT_SPEED, 1.5)
+                .add(Attributes.ATTACK_DAMAGE, 4.0)
+                .add(Attributes.FOLLOW_RANGE, 32.0)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 0.3)
                 // 游泳速度倍率（NeoForge 标准扩展属性，默认 1.0）。
                 // 关键：LivingEntity.travel 在水里把速度系数先锁死成硬编码的 0.02，
                 // 只有这个属性（或 WATER_MOVEMENT_EFFICIENCY）能把它放大；
                 // 否则 SmoothSwimmingMoveControl 设的速度、MOVEMENT_SPEED 全被无视，
                 // 结果就是"在水里几乎不动"。
-                // 默认 7.5 倍 ≈ 0.15 格/tick（约 3 格/秒）—— 原为 15 倍，主人反馈"移速太快"故减半。
+                // 7.5 倍 ≈ 0.15 格/tick（约 3 格/秒）—— 原为 15 倍，主人反馈"移速太快"故减半。
                 // 注意：这只影响水里；陆地/登陆突袭走的是上面的 MOVEMENT_SPEED。
-                .add(NeoForgeMod.SWIM_SPEED, HybridCreeperConfig.WATER_CREEPER_SWIM_SPEED.get());
+                .add(NeoForgeMod.SWIM_SPEED, 7.5);
     }
 
     /**
