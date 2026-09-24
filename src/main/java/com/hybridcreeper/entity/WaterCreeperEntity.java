@@ -32,6 +32,7 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
 
@@ -226,6 +227,46 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
     @Override
     public boolean isPushedByFluid(FluidType type) {
         return false;
+    }
+
+    /**
+     * 允许"身体浸在液体里"生成 —— <b>水生生物自然生成的关键一环</b>。
+     *
+     * <h2>不覆写会怎样（这就是 2026-09-24 那个"一条都不刷"的根因）</h2>
+     * <p>自然生成的最后一道闸门是 {@code EventHooks#checkSpawnPosition}
+     * （NeoForge），它默认走：</p>
+     * <pre>
+     *   mob.checkSpawnRules(level, spawnType) &amp;&amp; mob.checkSpawnObstruction(level)
+     * </pre>
+     * <p>而 {@code Mob#checkSpawnObstruction} 的默认实现是</p>
+     * <pre>
+     *   return !level.containsAnyLiquid(this.getBoundingBox()) &amp;&amp; level.isUnobstructed(this);
+     * </pre>
+     * <p>—— <b>"身体包围盒里不能有液体"</b>。这是给陆地生物准备的判定：它们确实该在干燥处落地。
+     * 我们的生物泡在水里，这一条<b>永远为假</b>，于是前面所有条件（位置类型
+     * {@code IN_WATER}、生物群系权重、附加谓词、{@code noCollision}）全部通过，
+     * 最后仍然被这一句否掉 —— 表现为"生成表里有它，世界里一条都没有"。</p>
+     *
+     * <h2>为什么这么写</h2>
+     * <p>原版每一个"在水里刷"的生物都覆写了本方法，且实现完全一致 ——
+     * {@link net.minecraft.world.entity.animal.WaterAnimal}（墨鱼/海豚/鱼）、
+     * {@link net.minecraft.world.entity.monster.Drowned}（<b>同样是 {@code Monster}，
+     * 同样用 {@code IN_WATER} + {@code MONSTER/WATER_CREATURE} 生成</b>）、
+     * {@code Guardian}、{@code Axolotl}、{@code Strider} 都是这一句：</p>
+     * <pre>
+     *   return level.isUnobstructed(this);
+     * </pre>
+     * <p>只保留"别卡在方块里"，去掉"不能有液体"。本方法逐字对齐它们，
+     * 所以溺尸能刷的水域，它也能刷。</p>
+     *
+     * <p>注意：{@code Monster#getMobType()} 返回 {@code UNDEAD}，所以它和溺尸一样
+     * 会溺水 —— 这个由 {@code data/minecraft/tags/entity_type/can_breathe_under_water.json}
+     * 把本实体加进 {@code EntityTypeTags.CAN_BREATHE_UNDER_WATER} 解决
+     * （{@code LivingEntity#canBreatheUnderwater()} 是 final 的，只能走标签）。</p>
+     */
+    @Override
+    public boolean checkSpawnObstruction(LevelReader level) {
+        return level.isUnobstructed(this);
     }
 
     /* ------------------------------------------------------------------

@@ -8,6 +8,42 @@
 
 ---
 
+## [1.7.1] — 2026-09-24
+
+### 修复
+
+- **苦力怕海豚一条都不自然生成**。根因**不在**生成表 —— 生物群系修饰符、
+  权重、位置类型全都注册正确（开发服实测：`deep_cold_ocean` 的
+  `water_creature` 表 = `[squid(3), water_creeper(1)]`）。
+  卡住它的是自然生成的**最后一道闸门** `Mob#checkSpawnObstruction`：
+
+  ```java
+  // Mob 的默认实现（给陆地生物用的）
+  return !level.containsAnyLiquid(this.getBoundingBox()) && level.isUnobstructed(this);
+  ```
+
+  即"**身体包围盒里不能有液体**"。我们的生物泡在水里，这一条**永远为假** ——
+  于是 `IN_WATER` 位置类型、生物群系权重、附加谓词、`noCollision`
+  全都通过，最后还是被这一句否掉。症状就是"**生成表里有它，世界里一条都没有**"。
+
+  - **修复**：在 `WaterCreeperEntity` 覆写
+    `checkSpawnObstruction(LevelReader)` → `return level.isUnobstructed(this);`，
+    与**原版每一个水生生物逐字一致** —— `WaterAnimal`（墨鱼/海豚/鱼）、
+    `Guardian`、`Axolotl`、`Strider`，以及**同为 `Monster` 的 `Drowned`（溺尸）**。
+    溺尸能刷的水域，它现在也能刷。
+  - **实测证据**（开发服 `runServer` 打印）：修复前 `checkSpawnObstruction=false`，
+    修复后 `true`，整条链 `checkSpawnPosition / isSpawnPositionOk /
+    checkSpawnRules / noCollision` 全部 `true`；对照组**原版苦力怕**
+    在同一池水里仍为 `false`（判定没被削弱）。
+
+### 说明
+
+- 生成范围仍是**海洋 + 河流**生物群系（与墨鱼一致）。**湖泊/池塘/沼泽**
+  所在的生物群系（平原、森林、沼泽…）原版 `water_creature` 表**本身就是空的**，
+  所以那些地方不会有它 —— 想扩大到"任何水域"需要另加生物群系修饰符。
+
+---
+
 ## [1.7.0] — 2026-09-24
 
 ### 变更
@@ -257,6 +293,7 @@
 
 ---
 
+[1.7.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.1
 [1.7.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.0
 [1.6.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.6.0
 [1.5.2]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.2
