@@ -391,6 +391,12 @@ def main():
     anim = (bb.get("animations") or [None])[0]
     prep(bb, anim)
     print("模型 %s  %d 个立方体  %d 段动画" % (bb.get("name"), len(bb["elements"]), len(bb.get("animations") or [])))
+    # ⚠️ Blockbench 里「隐藏」≠「不导出」：visibility=false 的元素照样会进游戏，
+    #    还常常把别的部件整个盖住（胸鳍被隐藏的海豚身体吃掉就是这么来的）。
+    hidden = [e["name"] for e in bb["elements"] if e.get("visibility") is False]
+    if hidden:
+        print("⚠️  有 %d 个元素是隐藏的（visibility=false）但 export=true，会被导出到游戏；" % len(hidden))
+        print("    如果不是刻意要的，请先在 .bbmodel 里删掉：%s" % ", ".join(hidden))
     parts = G.to_parts(bb)
     if not verify(bb, parts):
         raise SystemExit("!! 校验未通过，已停止生成")

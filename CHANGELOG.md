@@ -8,6 +8,20 @@
 
 ---
 
+## [1.5.1] — 2026-09-24
+
+### 修复
+
+- **左右胸鳍在游戏里"消失"**：`.bbmodel` 里残留了一块**隐藏的「海豚身体」方块**
+  （`visibility = false`，但在 Blockbench 里 `export` 仍为 true）。
+  它被隐藏所以编辑时看不见，导出到游戏后却把两片胸鳍**整个包在体积内部**
+  （胸鳍 y16–20 / z−1..6 完全落在它 y15–22 / z−5..8 之内）。
+  已从 `.bbmodel` 里删除该残留方块，胸鳍恢复可见。
+- 顺带把生成器补强：**导出前会提醒 `visibility=false` 的元素**
+  （Blockbench 隐藏≠不导出，这种残留最容易漏）。
+
+---
+
 ## [1.5.0] — 2026-09-24
 
 ### 新增
@@ -189,6 +203,7 @@
 
 ---
 
+[1.5.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.1
 [1.5.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.0
 [1.4.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.4.0
 [1.3.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.1

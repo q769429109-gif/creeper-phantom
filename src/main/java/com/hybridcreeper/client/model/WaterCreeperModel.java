@@ -55,9 +55,8 @@ public class WaterCreeperModel extends HierarchicalModel<WaterCreeperEntity> {
         PartDefinition root = mesh.getRoot();
 
         PartDefinition _body = root.addOrReplaceChild("body",
-                CubeListBuilder.create()
-                        .texOffs(22, 0).addBox(-4.0F, -9.0F, -5.0F, 8.0F, 7.0F, 13.0F, DEFORM)
-                , PartPose.offset(0.0F, 24.0F, 0.0F));
+                CubeListBuilder.create(),
+                PartPose.offset(0.0F, 24.0F, 0.0F));
 
         // ↓ 原立方体带旋转，提成独立子部件
         _body.addOrReplaceChild("creeper_torso",
