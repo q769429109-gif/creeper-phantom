@@ -191,7 +191,8 @@
 [spawn]
     naturalSpawn = true              # 是否参与自然生成（false = 只能 /summon 或刷怪蛋）
                                      # 生成条件：夜晚/阴暗处 + 主世界地表，与僵尸同款
-                                     # 密度由数据包 creeper_phantom_spawns.json 的 weight 控制（默认 20）
+                                     # 密度由数据包 creeper_phantom_spawns.json 的 weight 控制（默认 60）
+                                     # ⚠️ 与僵尸一样受「怪物全局上限」约束：附近怪物满了就刷不出来
 
 [debug]
     debugLog = false
