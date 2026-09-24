@@ -148,9 +148,10 @@ public class HybridCreeperSpawner implements CustomSpawner {
                 continue;
             }
 
-            // 11. 一次刷 1~（难度等级+1）只，与原版一致；数量可被事件覆写
+            // 11. 一次刷 1~（难度等级+1）只，与原版一致；数量可被事件覆写。
+            //     再乘上配置的数量倍率（默认 2 = 普通幻翼的两倍）。
             SpawnGroupData groupData = null;
-            int count = event.getPhantomsToSpawn();
+            int count = event.getPhantomsToSpawn() * HybridCreeperConfig.SPAWN_COUNT_MULTIPLIER.get();
 
             for (int i = 0; i < count; i++) {
                 HybridCreeperEntity blast = ModEntities.CREEPER_PHANTOM.get().create(level);

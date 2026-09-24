@@ -128,11 +128,11 @@ public class HybridCreeper {
      *   <li><b>附加谓词</b> —— 见下面 {@link #checkWaterCreeperSpawnRules}。</li>
      * </ol>
      *
-     * <h2>为什么不用 {@code Monster::checkMonsterSpawnRules}</h2>
-     * <p>它的第二个参数是 {@code ServerLevelAccessor}，而
-     * {@code SpawnPlacements.SpawnPredicate} 只给 {@code LevelAccessor} ——
-     * 方法引用的参数类型对不上，编译不过。所以这里自己写一份，把 {@code Monster}
-     * 里那两段判定（难度 + 亮度）原样搬过来，再补一条自己的条件。</p>
+     * <h2>为什么不用 {@code WaterAnimal::checkSurfaceWaterAnimalSpawnRules}</h2>
+     * <p>墨鱼、海豚、各种鱼用的都是它，但它会把生成点卡在<b>海平面往下 13 格以内</b>
+     * —— 那是"表层水生生物"的设定。而我们要的是<b>任何水域都能刷</b>，深水区也算，
+     * 所以这里自己写谓词（见 {@link #checkWaterCreeperSpawnRules}），
+     * 只保留"不是和平难度 + 全身在水里"。</p>
      */
     private static void onRegisterSpawnPlacements(RegisterSpawnPlacementsEvent event) {
         event.register(
@@ -146,18 +146,19 @@ public class HybridCreeper {
     /**
      * 苦力怕海豚能否在这个位置生成。
      *
-     * <p>前两条逐字对标 {@code Monster#checkMonsterSpawnRules}，实现需求里
-     * <b>「与普通苦力怕相似，在夜晚或阴暗的环境中生成」</b>：</p>
+     * <p>只保留两条：<b>难度不是和平</b>，以及<b>全身没在水里</b>。</p>
      * <ul>
-     *   <li>难度不是和平；</li>
-     *   <li>亮度够暗（{@code Monster#isDarkEnoughToSpawn}，阈值随维度难度浮动）。</li>
+     *   <li>和平模式不生成（它终究是个敌对生物）；</li>
+     *   <li>{@code pos} 与 {@code pos} 上方一格都必须是水 —— 这样不会在"水面正下方一格"
+     *       生成然后半个身子探出水面（看着像搁浅），1 格深的浅水也不会刷。</li>
      * </ul>
      *
-     * <p>第三条是我加的：<b>头顶那一格也必须是水</b>。它同时解决两件事 ——</p>
-     * <ul>
-     *   <li>不会在"水面正下方一格"生成然后半个身子探出水面，那看着像搁浅；</li>
-     *   <li>浅水（1 格深）刷不出来。而深水区本来就暗，正好落在"阴暗水域"的设定里。</li>
-     * </ul>
+     * <h2>为什么去掉了亮度判定</h2>
+     * <p>原设计要求"夜晚或阴暗环境生成"，所以这里原本照抄了
+     * {@code Monster#isDarkEnoughToSpawn}。2026-09-24 主人改成
+     * <b>「任何水域都会生成，生成概率和墨鱼一样」</b> —— 墨鱼是
+     * {@code WATER_CREATURE}，<b>水里随时能刷、与光照无关</b>（大白天也见得到），
+     * 所以这条亮度门槛必须去掉；否则只有黑水里才刷得出来，实际等于"看不见它"。</p>
      *
      * <p>注意这里<b>没有</b>调用 {@code Mob#checkMobSpawnRules}（原版怪物规则里的第三条）。
      * 它检查"下方方块是否 {@code isValidSpawn}"，那是给陆地生物准备的地面判定 ——
@@ -174,11 +175,7 @@ public class HybridCreeper {
         if (serverLevel.getDifficulty() == Difficulty.PEACEFUL) {
             return false;
         }
-        if (!MobSpawnType.ignoresLightRequirements(spawnType)
-                && !Monster.isDarkEnoughToSpawn(serverLevel, pos, random)) {
-            return false;
-        }
-        // 全身没在水里
+        // 全身没在水里（浅水 1 格不刷，避免半个身子探出水面的"搁浅"感）
         return level.getFluidState(pos).is(FluidTags.WATER)
                 && level.getFluidState(pos.above()).is(FluidTags.WATER);
     }

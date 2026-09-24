@@ -73,22 +73,26 @@ public final class ModEntities {
     /**
      * 苦力怕海豚。
      *
-     * <h2>尺寸为什么抄海豚</h2>
-     * <p>当前阶段用的是原版海豚模型（{@code DolphinModel}），所以命中箱先跟着海豚走
-     * （{@code sized(0.9F, 0.6F).eyeHeight(0.3F)}），不然会出现
-     * "模型的嘴在箱子里、尾巴穿出箱子外"的错位感。等换自定义模型时再一起改。</p>
+     * <h2>尺寸</h2>
+     * <p>命中箱沿用原版海豚的 {@code sized(0.9F, 0.6F).eyeHeight(0.3F)} ——
+     * 自定义模型（海豚身 + 苦力怕的躯干/头/四条腿）整体轮廓与海豚相近，沿用它手感最自然。</p>
      *
-     * <h2>为什么是 {@code MONSTER} 而不是 {@code WATER_CREATURE}</h2>
-     * <p>{@code WATER_CREATURE} 的刷新上限只有 <b>5</b>，而且会被海豚、鱿鱼先占满 ——
-     * 那样它在海里几乎刷不出来。{@code MONSTER} 上限 70，空间大得多。</p>
-     * <p>这正是原版 {@code Drowned}（溺尸）的选择：{@code MONSTER} 分类 +
-     * {@code IN_WATER} 生成位置限制，两头都占。所以"只在水中生成"由
-     * {@link net.minecraft.world.entity.SpawnPlacementTypes#IN_WATER} 保证，
-     * 和刷新池分类是两件独立的事。</p>
+     * <h2>为什么是 {@code WATER_CREATURE}（和墨鱼同一个刷新池）</h2>
+     * <p>这是主人 2026-09-24 指定的：<b>生成概率和墨鱼一样</b>。
+     * 刷新分类决定的是"和谁抢刷新名额"，要和墨鱼同档就必须进同一个池子：</p>
+     * <ul>
+     *   <li>上限 <b>5</b>（与墨鱼、海豚、鱿鱼共用）—— 所以它是"常见但不泛滥"的量级；</li>
+     *   <li>{@code isFriendly() == true}，于是刷新只在"刷动物"那一 tick 发生
+     *       （{@code isSpawningAnimals()}，每 400 tick 一次），节奏与墨鱼完全一致；</li>
+     *   <li>墨鱼的位置判定是 {@code IN_WATER}，我们同样是
+     *       {@code IN_WATER}（见 {@code HybridCreeper#onRegisterSpawnPlacements}）。</li>
+     * </ul>
+     * <p>Java 类本身仍继承 {@code Monster}（它确实是个敌对生物）——
+     * <b>刷新分类与 Java 基类是两件独立的事</b>，分类只管"进哪个池子"。</p>
      */
     public static final DeferredHolder<EntityType<?>, EntityType<WaterCreeperEntity>> WATER_CREEPER =
             ENTITY_TYPES.register(WATER_CREEPER_NAME, () -> EntityType.Builder
-                    .<WaterCreeperEntity>of(WaterCreeperEntity::new, MobCategory.MONSTER)
+                    .<WaterCreeperEntity>of(WaterCreeperEntity::new, MobCategory.WATER_CREATURE)
                     .sized(0.9F, 0.6F)
                     .eyeHeight(0.3F)
                     .clientTrackingRange(10)

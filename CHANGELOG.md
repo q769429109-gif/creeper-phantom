@@ -8,6 +8,27 @@
 
 ---
 
+## [1.7.0] — 2026-09-24
+
+### 变更
+
+- **苦力怕幻翼生成数量翻倍**：一次生成尝试刷出的数量乘 2
+  （原版幻翼按难度刷 1~N 只，本模组 ×2）。新增配置项
+  `spawnCountMultiplier`（默认 2；改成 1 即与原版一致）。
+- **苦力怕海豚：改成和墨鱼同一个刷新池**（`MONSTER` → `WATER_CREATURE`）。
+  - **不再要求"阴暗环境"** —— 水里**任何时段**都能刷（与墨鱼一致），
+    之前只在黑水里刷，实际等于"看不见它"；
+  - 刷新配额与墨鱼、海豚共用（上限 **5**），节奏也跟着"刷动物"那一 tick
+    （每 400 tick 一次），所以出现频率**真的和墨鱼相当**；
+  - 生成权重/数量对齐墨鱼：海洋 `weight 1 / min1 / max4`、
+    河流 `weight 2 / min1 / max4`（原先 40/30，明显过密）；
+  - 位置判定仍是自写的"全身在水里"，**没有**照抄墨鱼的
+    `checkSurfaceWaterAnimalSpawnRules` —— 那会把生成点限制在海平面以下 13 格内，
+    我们要的是**深水区也能刷**。
+  - Java 类仍是 `Monster`：刷新分类与 Java 基类是两件事。
+
+---
+
 ## [1.6.0] — 2026-09-24
 
 ### 变更
@@ -236,6 +257,7 @@
 
 ---
 
+[1.7.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.0
 [1.6.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.6.0
 [1.5.2]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.2
 [1.5.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.1

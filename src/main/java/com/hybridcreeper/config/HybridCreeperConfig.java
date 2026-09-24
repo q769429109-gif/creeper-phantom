@@ -68,6 +68,9 @@ public final class HybridCreeperConfig {
     /** 生成尝试间隔上限（秒，不含）。原版幻翼 = 120（实际区间 [60, 120)）。 */
     public static final ModConfigSpec.IntValue SPAWN_INTERVAL_MAX_SECONDS;
 
+    /** 一次生成尝试刷出的数量倍率。原版幻翼 = 1（按难度刷 1~N 只）；本模组默认 2（两倍）。 */
+    public static final ModConfigSpec.IntValue SPAWN_COUNT_MULTIPLIER;
+
     /* ---------------- 调试 ---------------- */
 
     /** 是否在日志里打印每次引爆的坐标与生物信息。 */
@@ -128,6 +131,10 @@ public final class HybridCreeperConfig {
         SPAWN_INTERVAL_MAX_SECONDS = b.comment("生成尝试间隔上限（秒，不含）。原版幻翼 = 120。",
                         "即实际间隔在 [下限, 上限) 之间随机取。")
                 .defineInRange("spawnIntervalMaxSeconds", 120, 1, 3600);
+        SPAWN_COUNT_MULTIPLIER = b.comment("一次生成尝试刷出的数量倍率（相对原版幻翼）。",
+                        "原版幻翼 = 1（按难度刷 1~N 只）；本模组默认 2 = 两倍。",
+                        "想恢复与原版完全一致的数量，改成 1。")
+                .defineInRange("spawnCountMultiplier", 2, 1, 20);
         b.pop();
 
         b.comment("调试 Debug").push("debug");
