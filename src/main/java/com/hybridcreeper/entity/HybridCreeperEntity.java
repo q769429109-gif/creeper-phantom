@@ -4,13 +4,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.monster.Phantom;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.storage.loot.LootTable;
 
 /**
  * 苦力怕幻翼 —— 独立于原版幻翼的自定义生物。
@@ -142,28 +140,20 @@ public class HybridCreeperEntity extends Phantom implements PoweredMob {
         this.setPowered(true);
     }
 
-    /**
-     * 掉落表复用原版幻翼的（幻翼膜）。
+    /*
+     * 掉落表：从 v1.10.0 起改用本模组自己的表
+     *   data/hybridcreeper/loot_table/entities/creeperphantom.json
+     * 内容是「幻翼膜 + 火药」。
      *
-     * <p>默认情况下每个 {@code EntityType} 会去找
-     * {@code data/<命名空间>/loot_table/entities/<id>.json}，也就是
-     * {@code hybridcreeper:entities/blast_phantom} —— 那个文件不存在，掉落就会是空的。
-     * 与其复制一份掉落表 JSON 出来单独维护（原版一改我们就过期），
-     * 不如直接把 {@code PHANTOM} 的掉落表 key 拿过来用，<b>永远跟随原版</b>。</p>
+     * 这里原本覆写 getDefaultLootTable() 直接借用原版幻翼的掉落表（只掉幻翼膜）；
+     * 要加火药就必须有自己的表，所以那个覆写已经删掉，改为走 Minecraft 的默认约定 ——
+     * EntityType#getDefaultLootTable() 会把【注册名】加上前缀 "entities/"：
+     *     hybridcreeper:creeperphantom  →  hybridcreeper:entities/creeperphantom
+     * 与上面的文件名一一对应。
      *
-     * <p><b>注意这里覆写的是 {@code getDefaultLootTable()} 而不是 {@code getLootTable()}：</b>
-     * 后者在 {@code Mob} 里是 {@code final} 的，编译不过。
-     * {@code Mob#getLootTable()} 的实现是
-     * {@code return this.lootTable == null ? this.getDefaultLootTable() : this.lootTable;}
-     * —— 「默认掉落表」这个钩子才是留给子类用的，而 {@code lootTable} 字段那条分支
-     * 是给 {@code /data merge} 或结构文件直接指定掉落表用的。</p>
+     * ⚠️ 注册名是 creeperphantom（**没有下划线**），改表名时务必同步文件名 ——
+     *    数据包里的 loot_table 一旦缺失不会报错，只是掉落静默变空，很难查。
      *
-     * <p>反过来说：哪天你想让苦力怕幻翼掉别的东西，覆写这个方法返回自己的
-     * {@code ResourceKey} 即可；或者干脆在数据包里放一份
-     * {@code data/hybridcreeper/loot_table/entities/blast_phantom.json} 并把这里删掉。</p>
+     * 顺带记：能覆写的是 getDefaultLootTable()，getLootTable() 在 Mob 里是 final 的。
      */
-    @Override
-    protected ResourceKey<LootTable> getDefaultLootTable() {
-        return EntityType.PHANTOM.getDefaultLootTable();
-    }
 }

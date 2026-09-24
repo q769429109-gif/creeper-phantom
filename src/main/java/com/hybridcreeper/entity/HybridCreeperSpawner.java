@@ -40,8 +40,9 @@ import net.neoforged.neoforge.event.entity.player.PlayerSpawnPhantomsEvent;
  *       （别的模组可以在这里 ALLOW / DENY / 改数量）；</li>
  *   <li>玩家头顶能看到天（{@code PlayerSpawnPhantomsEvent#shouldSpawnPhantoms}）；</li>
  *   <li>当前难度 {@code isHarderThan(random * 3)}；</li>
- *   <li>玩家距离上次睡觉的刻数 {@code TIME_SINCE_REST} 满足
- *       {@code random.nextInt(ticks) >= 72000}（= 至少连续 3 个游戏日没睡）；</li>
+ *   <li><b>（默认已跳过）</b>玩家距离上次睡觉的刻数 {@code TIME_SINCE_REST} 满足
+ *       {@code random.nextInt(ticks) >= 72000}（= 至少连续 3 个游戏日没睡）——
+ *       这条「失眠」限制由配置 {@code spawn.requireInsomnia} 控制，<b>默认关闭</b>；</li>
  *   <li>生成点：玩家上方 20~34 格、水平 ±10 格；</li>
  *   <li>该位置是"合法的空生成方块"；</li>
  *   <li>刷出 1~（难度等级+1）只，各自 {@code finalizeSpawn} 后入场。</li>
@@ -122,15 +123,19 @@ public class HybridCreeperSpawner implements CustomSpawner {
                 continue;
             }
 
-            // 8. 失眠时长门槛。TIME_SINCE_REST 单位是 tick，
-            //    72000 tick = 3 个游戏日。clamp 下限 1 是为了避免 nextInt(0) 抛异常。
-            ServerStatsCounter stats = player.getStats();
-            int ticksSinceRest = Mth.clamp(
-                    stats.getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)),
-                    1, Integer.MAX_VALUE);
-
-            if (!forced && random.nextInt(ticksSinceRest) < HybridCreeperConfig.MIN_TICKS_SINCE_REST.get()) {
-                continue;
+            // 8. 失眠时长门槛 —— **默认关闭**（配置 spawn.requireInsomnia = false）。
+            //    原版幻翼要求玩家连续 3 个游戏日（72000 tick）没睡觉才有机会刷；
+            //    2026-09-24 按主人要求去掉这条限制，所以默认整段跳过。
+            //    想恢复原版行为，把 requireInsomnia 改回 true 即可（阈值仍看 minTicksSinceRest）。
+            //    clamp 下限 1 是为了避免 nextInt(0) 抛异常。
+            if (!forced && HybridCreeperConfig.SPAWN_REQUIRE_INSOMNIA.get()) {
+                ServerStatsCounter stats = player.getStats();
+                int ticksSinceRest = Mth.clamp(
+                        stats.getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)),
+                        1, Integer.MAX_VALUE);
+                if (random.nextInt(ticksSinceRest) < HybridCreeperConfig.MIN_TICKS_SINCE_REST.get()) {
+                    continue;
+                }
             }
 
             // 9. 生成点：玩家上方 20~34 格，水平方向各 ±10 格 —— 与原版一致

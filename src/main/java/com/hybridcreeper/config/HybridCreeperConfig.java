@@ -56,7 +56,15 @@ public final class HybridCreeperConfig {
     /** 是否参与自然生成。关掉后只能靠指令或刷怪蛋生成。 */
     public static final ModConfigSpec.BooleanValue SPAWN_ENABLED;
 
-    /** 失眠时长门槛（tick）。原版幻翼 = 72000（3 个游戏日）。 */
+    /**
+     * 是否沿用原版幻翼的「失眠」限制（玩家连续若干游戏日没睡觉才有机会遇到它）。
+     *
+     * <p>默认 <b>false</b> —— 2026-09-24 按主人要求去掉「三天不睡觉」这条限制。
+     * 改成 true 即恢复原版行为，阈值由 {@link #MIN_TICKS_SINCE_REST} 决定。</p>
+     */
+    public static final ModConfigSpec.BooleanValue SPAWN_REQUIRE_INSOMNIA;
+
+    /** 失眠时长门槛（tick）。原版幻翼 = 72000（3 个游戏日）。仅在 requireInsomnia = true 时参与判定。 */
     public static final ModConfigSpec.IntValue MIN_TICKS_SINCE_REST;
 
     /** 夜晚亮度阈值。原版幻翼 = 5（getSkyDarken() 小于它才算天黑）。 */
@@ -173,8 +181,15 @@ public final class HybridCreeperConfig {
                         "false = 世界里不会自己刷出来，只能用指令 /summon 或刷怪蛋。",
                         "true = 与原版幻翼完全相同的条件（夜晚 + 连续 3 天不睡觉 + 头顶见天）。")
                 .define("naturalSpawn", true);
+        SPAWN_REQUIRE_INSOMNIA = b.comment("是否沿用原版幻翼的「失眠」限制（连续几天不睡觉才刷）。",
+                        "false = 去掉这条限制，满足夜晚/高度等条件就会刷（默认）；",
+                        "true  = 恢复原版行为：玩家需连续 minTicksSinceRest 没睡觉才有机会遇到它。",
+                        "⚠️ 游戏规则 doInsomnia 不受本项影响 —— 它是全局幻翼开关：",
+                        "   /gamerule doInsomnia false 会让原版幻翼与我们这只都停刷。")
+                .define("requireInsomnia", false);
         MIN_TICKS_SINCE_REST = b.comment("玩家距上次睡觉至少多少 tick 才会刷。",
-                        "原版幻翼 = 72000（= 3 个游戏日 = 60 分钟）。调低会明显变多。")
+                        "原版幻翼 = 72000（= 3 个游戏日 = 60 分钟）。调低会明显变多。",
+                        "⚠️ 仅在 requireInsomnia = true 时参与判定；默认 false，本项被跳过。")
                 .defineInRange("minTicksSinceRest", 72000, 0, Integer.MAX_VALUE);
         SKY_DARKEN_THRESHOLD = b.comment("天黑程度阈值：getSkyDarken() 小于它才算夜晚。",
                         "原版幻翼 = 5。数值越小白天的容忍度越低。")

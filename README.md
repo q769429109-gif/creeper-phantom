@@ -36,7 +36,9 @@
 
 一只**会俯冲自爆**的幻翼。
 
-它和原版幻翼几乎完全一样：相同的血量（20）、攻击力、跟随范围、命中箱、叫声，一样掉幻翼膜，一样怕猫、会被阳光点燃、在和平模式消失。连**出现方式都一模一样** —— 连续 3 个游戏日不睡觉，夜晚在户外就会被它找上门。
+它和原版幻翼几乎一样：相同的血量（20）、攻击力、跟随范围、命中箱、叫声，一样怕猫、会被阳光点燃、在和平模式消失。**掉落物比原版多一样** —— 除了幻翼膜，还掉**火药**（0~2 个，受抢夺加成）。
+
+**有一处刻意的区别：它不再要求「三天不睡觉」。** 原版幻翼只在玩家连续 3 个游戏日没睡觉之后才会出现；苦力怕幻翼**去掉了这条限制**，只要入夜、你在户外，它就可能找上门（想恢复原版那种限制：把 `[spawn] requireInsomnia` 改回 `true`）。
 
 **唯一的区别在它咬中你的那一瞬间。**
 
@@ -152,7 +154,7 @@
 | 自爆后同归于尽 | `phantomImmune = false` |
 | 关掉爆炸，只保留生物 | `enabled = false` |
 | 压根不想让它自然刷出来 | `naturalSpawn = false` |
-| 想让它更容易出现 | `minTicksSinceRest = 24000`（3 个游戏日 → 1 个） |
+| **恢复原版「三天不睡觉」的限制** | `[spawn] requireInsomnia = true` |
 | 看不出到底有没有触发 | `debugLog = true`，日志里会打坐标 |
 | **海豚别自爆，只撞船** | `[waterCreeper] explode = false` |
 | **海豚在水里太快 / 太慢** | `[waterCreeper.attributes] swimSpeed`（默认 7.5） |
@@ -187,12 +189,14 @@
     cooldownTicks = 40
 
 [spawn]
-    # 以下默认值均与原版幻翼完全一致。
     naturalSpawn = true              # 是否参与自然生成
-    minTicksSinceRest = 72000        # 距上次睡觉至少多少 tick（72000 = 3 个游戏日）
+    requireInsomnia = false          # 是否沿用原版「连续几天不睡觉才刷」的限制（本模组默认关掉）
+    minTicksSinceRest = 72000        # 失眠阈值：距上次睡觉至少多少 tick（72000 = 3 个游戏日）
+                                     # ⚠️ 仅在 requireInsomnia = true 时参与判定
     skyDarkenThreshold = 5           # 天空暗度达到多少才算夜晚
     spawnIntervalMinSeconds = 60     # 生成尝试间隔下限（秒）
     spawnIntervalMaxSeconds = 120    # 生成尝试间隔上限（秒）
+    spawnCountMultiplier = 2         # 一次刷出的数量倍率（原版幻翼 = 1，本模组 = 2）
 
 [debug]
     debugLog = false

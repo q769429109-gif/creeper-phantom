@@ -8,6 +8,29 @@
 
 ---
 
+## [1.10.0] — 2026-09-24
+
+### 变更
+
+- **苦力怕幻翼去掉了「三天不睡觉」的生成限制**（原版幻翼要求玩家连续 3 个游戏日没睡觉）。
+  - 新增配置 `[spawn] requireInsomnia`，默认 **`false`**；改成 `true` 即恢复原版行为，
+    阈值仍由 `minTicksSinceRest`（默认 72000 = 3 个游戏日）决定。
+  - 其余生成条件一律保持原样：夜晚（`skyDarkenThreshold`）、玩家头顶能看到天、
+    难度随机门槛、40~120 秒的尝试间隔。游戏规则 `doInsomnia` 也照旧生效
+    （`/gamerule doInsomnia false` 会让原版幻翼与这只都停止生成）。
+
+### 新增
+
+- **苦力怕幻翼掉落火药**。新增本模组专属掉落表
+  `data/hybridcreeper/loot_table/entities/creeperphantom.json`，含两个池：
+  | 掉落物 | 数量 | 条件 | 参照 |
+  | --- | --- | --- | --- |
+  | 幻翼膜 | 0~1（+抢夺） | 需玩家击杀 | 与原版幻翼完全一致 |
+  | **火药** | **0~2**（+抢夺） | 无（爆炸/摔死也会掉） | 与苦力怕完全一致 |
+- 为此**移除**了 `HybridCreeperEntity#getDefaultLootTable()` 的覆写 ——
+  它原本直接借用原版幻翼的掉落表（只掉幻翼膜）。现在走 Minecraft 的默认约定：
+  注册名 `hybridcreeper:creeperphantom` → 掉落表 `hybridcreeper:entities/creeperphantom`。
+
 ## [1.9.1] — 2026-09-24
 
 ### 修复
@@ -371,6 +394,7 @@ checkSpawnObstruction / checkSpawnPosition / noCollision` 全 `true`。
 
 ---
 
+[1.10.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.10.0
 [1.9.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.9.1
 [1.9.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.9.0
 [1.8.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.8.0
