@@ -8,6 +8,20 @@
 
 ---
 
+## [1.0] — 2026-09-24（首个公开版本）
+
+### 变更
+
+- **版本基线重设为 `1.0`**：此前内部一路迭代到 1.11.1，本次作为**首个公开发布版本**统一为 1.0。
+- **README 以面向玩家的视角重写**：安装 → 两只生物的行为 / 危险度 / 出现条件 → 闪电充能 →
+  配置 → 常见问题。去掉了实现细节（生成器注入方式、数据包文件名等），
+  补上了玩家真正会撞见的问题（"幻翼刷不出来 = 附近怪物堆满上限"等）。
+- 新增 `docs/RELEASE-NOTES-v1.0.md`（发布说明，可直接用作 Release 正文）。
+
+### 说明
+
+- **玩法与上一个内部版本（1.11.1）完全一致，没有任何数值或机制改动**，只是改版本号与文档。
+
 ## [1.11.1] — 2026-09-24
 
 ### 变更
@@ -454,6 +468,7 @@ checkSpawnObstruction / checkSpawnPosition / noCollision` 全 `true`。
 
 ---
 
+[1.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.0
 [1.11.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.11.1
 [1.11.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.11.0
 [1.10.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.10.0
