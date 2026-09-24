@@ -146,11 +146,11 @@ public class HybridCreeper {
     /**
      * 苦力怕海豚能否在这个位置生成。
      *
-     * <p>只保留两条：<b>难度不是和平</b>，以及<b>全身没在水里</b>。</p>
+     * <p>只保留两条：<b>难度不是和平</b>，以及<b>生成点那一格是水</b>。</p>
      * <ul>
      *   <li>和平模式不生成（它终究是个敌对生物）；</li>
-     *   <li>{@code pos} 与 {@code pos} 上方一格都必须是水 —— 这样不会在"水面正下方一格"
-     *       生成然后半个身子探出水面（看着像搁浅），1 格深的浅水也不会刷。</li>
+     *   <li>{@code pos} 必须是水方块。位置类型 {@code IN_WATER} 另外还要求
+     *       {@code pos} 上方不是红石导体（不能埋在一层实心方块下）。</li>
      * </ul>
      *
      * <h2>为什么去掉了亮度判定</h2>
@@ -160,9 +160,28 @@ public class HybridCreeper {
      * {@code WATER_CREATURE}，<b>水里随时能刷、与光照无关</b>（大白天也见得到），
      * 所以这条亮度门槛必须去掉；否则只有黑水里才刷得出来，实际等于"看不见它"。</p>
      *
+     * <h2>为什么去掉了"上方也必须是水"（2026-09-24 第二次放宽）</h2>
+     * <p>原本要求 {@code pos} 与 {@code pos.above()} 都是水，理由是"别在水面下方一格
+     * 生成、半个身子探出水面看着像搁浅"。但那条前提是<b>按高个子生物（1.8 格）想的</b> ——
+     * 本生物命中箱只有 <b>0.6 格高</b>，站在一格水里时身体（{@code y} ~ {@code y+0.6}）
+     * <b>整段都在那一格水方块内部</b>，根本不会露头，所以那条守卫是多余的；
+     * 而它的副作用是把<b>1 格深的浅水/小水坑全部排除</b>，与主人要的
+     * <b>「任何水域都会生成、每个小水坑都会刷」</b> 直接冲突。</p>
+     *
+     * <p>安全性由其它环节兜底，不会因此刷在奇怪的地方：</p>
+     * <ul>
+     *   <li>{@code IN_WATER} 已保证 {@code pos} 是水、且上方不是红石导体；</li>
+     *   <li>含水的实心方块（充水台阶/楼梯/栅栏等）会被
+     *       {@code NaturalSpawner} 的 {@code noCollision(type.getSpawnAABB(...))}
+     *       挡掉 —— 它们的碰撞箱和生物包围盒重叠。</li>
+     * </ul>
+     *
      * <p>注意这里<b>没有</b>调用 {@code Mob#checkMobSpawnRules}（原版怪物规则里的第三条）。
      * 它检查"下方方块是否 {@code isValidSpawn}"，那是给陆地生物准备的地面判定 ——
      * 水下方块（水、沙、海草）默认都不通过，照搬的话它永远刷不出来。</p>
+     *
+     * <p>也<b>没有</b>照抄 {@code WaterAnimal::checkSurfaceWaterAnimalSpawnRules} ——
+     * 它把生成点卡在海平面往下 13 格以内（"表层水生生物"），深水区就刷不到了。</p>
      */
     private static boolean checkWaterCreeperSpawnRules(EntityType<WaterCreeperEntity> type,
                                                       LevelAccessor level,
@@ -175,8 +194,7 @@ public class HybridCreeper {
         if (serverLevel.getDifficulty() == Difficulty.PEACEFUL) {
             return false;
         }
-        // 全身没在水里（浅水 1 格不刷，避免半个身子探出水面的"搁浅"感）
-        return level.getFluidState(pos).is(FluidTags.WATER)
-                && level.getFluidState(pos.above()).is(FluidTags.WATER);
+        // 生成点那一格是水就够了 —— 1 格深的浅水/小水坑也算"水域"
+        return level.getFluidState(pos).is(FluidTags.WATER);
     }
 }

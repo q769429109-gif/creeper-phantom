@@ -8,6 +8,45 @@
 
 ---
 
+## [1.8.0] — 2026-09-24
+
+### 变更
+
+- **苦力怕海豚的生成范围扩大到「任何水域」**（原为海洋 + 河流）。
+  - 生物群系修饰符由两份（`#minecraft:is_ocean` / `#minecraft:is_river`）
+    **合并为一份** `water_creeper_any_water.json`，作用于 `#minecraft:is_overworld`。
+    合并而**不是新增**，是为了避免海洋里被**加权两次**（`add_spawns` 是追加语义）；
+    实测每个群系里该条目只出现 **1** 次。
+  - 结果：**湖泊、池塘、沼泽乃至沙漠里的水洼**都会刷 —— 只要是水。
+  - 海洋/河流里的权重不变（仍是 `weight 1`，与墨鱼、海豚同池）。
+- **生成谓词放宽：不再要求「上方一格也是水」**，1 格深的浅水/小水坑现在也会刷。
+  - 原守卫的前提是"按 1.8 格高的生物想"；本生物命中箱只有 **0.6 格高**，
+    站在一格水里时身体整段都在那一格水方块内部、**根本不会露头**，
+    所以守卫是多余的 —— 副作用却是把小水坑全部排除。
+  - 安全性由其它环节兜底（已实测）：`IN_WATER` 保证生成点是水且上方非红石导体；
+    **充水台阶 / 楼梯 / 栅栏等含水的实心方块会被 `noCollision(spawnAABB)` 挡掉**
+    （实测充水台阶：`checkSpawnRules=true` 但 `noCollision=false` → 不生成）。
+
+### 实测（开发服 `runServer` 打印真实生成表）
+
+| 生物群系 | 该条目出现次数 | `water_creature` 生成表 |
+| --- | --- | --- |
+| `ocean` | 1 | `[squid(1), dolphin(1), water_creeper(1)]` |
+| `deep_cold_ocean` | 1 | `[squid(3), water_creeper(1)]` |
+| `river` / `frozen_river` | 1 | `[squid(2), water_creeper(1)]` |
+| `plains` / `forest` / `swamp` / `desert` / `savanna` / `jungle` / `mushroom_fields` / `snowy_plains` | 1 | `[water_creeper(1)]` |
+
+**12 / 12 命中。** 1 格深水坑：`isSpawnPositionOk / checkSpawnRules /
+checkSpawnObstruction / checkSpawnPosition / noCollision` 全 `true`。
+
+### ⚠️ 手感变化（本次是明确要求，先说清）
+
+- **任何水域都可能出现它** —— 包括家门口 1 格深的水坑。
+- 刷新配额仍是 `water_creature` 的**上限 5**，所以一个小水池里最多同时存在 5 只。
+- 在非海洋/河流群系里这个池子**只有它一个成员**，所以水坑一旦合格就是 100% 刷它。
+
+---
+
 ## [1.7.1] — 2026-09-24
 
 ### 修复
@@ -293,6 +332,7 @@
 
 ---
 
+[1.8.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.8.0
 [1.7.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.1
 [1.7.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.7.0
 [1.6.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.6.0
