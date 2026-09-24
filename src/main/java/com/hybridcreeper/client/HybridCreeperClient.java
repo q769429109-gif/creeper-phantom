@@ -2,6 +2,7 @@ package com.hybridcreeper.client;
 
 import com.hybridcreeper.HybridCreeper;
 import com.hybridcreeper.client.model.HybridCreeperModel;
+import com.hybridcreeper.client.model.WaterCreeperModel;
 import com.hybridcreeper.entity.ModEntities;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -23,18 +24,17 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 @EventBusSubscriber(modid = HybridCreeper.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class HybridCreeperClient {
 
-    /** 注册苦力怕幻翼自己的模型图层。 */
+    /** 注册两只生物各自的模型图层。 */
     @SubscribeEvent
     public static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
         event.registerLayerDefinition(HybridCreeperModel.LAYER, HybridCreeperModel::createBodyLayer);
+        event.registerLayerDefinition(WaterCreeperModel.LAYER, WaterCreeperModel::createBodyLayer);
     }
 
     /** 给两只生物挂上各自的渲染器。 */
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.CREEPER_PHANTOM.get(), HybridCreeperRenderer::new);
-        // 水下苦力怕当前复用原版海豚模型 —— 它的图层（ModelLayers.DOLPHIN）
-        // 原版启动时就烘焙好了，所以这里不需要再 registerLayerDefinition。
         event.registerEntityRenderer(ModEntities.WATER_CREEPER.get(), WaterCreeperRenderer::new);
     }
 

@@ -1,31 +1,30 @@
 package com.hybridcreeper.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.hybridcreeper.HybridCreeper;
+import com.hybridcreeper.client.model.WaterCreeperModel;
 import com.hybridcreeper.entity.WaterCreeperEntity;
-import net.minecraft.client.model.DolphinModel;
-import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
 /**
- * 水下苦力怕的渲染器 —— <b>当前阶段直接复用原版海豚模型与贴图</b>。
+ * 水下苦力怕的渲染器 —— 使用自定义模型
+ * {@link WaterCreeperModel}（海豚身体 + 苦力怕躯干 / 头 / 四条腿）。
  *
- * <h2>为什么能直接套海豚模型</h2>
- * <p>{@code DolphinModel} 的泛型是 {@code DolphinModel<T extends Entity>} ——
- * 它只要一个"有速度"的实体，不关心具体类型。所以换成我们的实体不需要改一行模型代码：</p>
+ * <h2>模型与贴图</h2>
  * <ul>
- *   <li>几何直接取原版图层 {@code ModelLayers.DOLPHIN}（启动时已经烘焙好了，
- *       我们<b>不需要</b>再注册一遍图层）；</li>
- *   <li>贴图直接用 {@code minecraft:textures/entity/dolphin.png}；</li>
- *   <li>动画（摆尾 + 身体俯仰）由 {@code DolphinModel#setupAnim} 自己根据
- *       {@code getDeltaMovement()} 算，正好适配它 1.5 的高速游动。</li>
+ *   <li>几何来自自绘的 Blockbench 工程 {@code creeperdolphin.bbmodel}，
+ *       由 {@code gen_water_creeper_model.py} 反向换算成 Java；</li>
+ *   <li>贴图是本模组自己的 {@code hybridcreeper:textures/entity/water_creeper.png}，
+ *       <b>不再借用原版海豚</b>；</li>
+ *   <li>图层是本模组私有命名空间（{@code hybridcreeper:water_creeper}），
+ *       与原版 {@code minecraft:dolphin} 互不影响 —— 原版海豚保持原样。</li>
  * </ul>
- * <p>换自定义模型时，把这两行换成自己的图层和贴图即可，膨胀逻辑不用动。</p>
  *
  * <h2>膨胀动画</h2>
- * <p>海豚模型没有引信这个概念，所以膨胀得我们自己画。缩放曲线<b>逐字抄自
+ * <p>模型自身没有引信这个概念，所以膨胀得我们自己画。缩放曲线<b>逐字抄自
  * {@code CreeperRenderer#scale}</b>：</p>
  * <pre>
  *   f  = swelling                                    // 0 → 1
@@ -43,20 +42,19 @@ import net.minecraft.util.Mth;
  *
  * <h2>充能层</h2>
  * <p>挂了一个 {@link PoweredOverlayLayer}：被闪电劈中后裹上滚动的蓝色能量。
- * 那层不依赖模型变形，对任何模型通用，所以以后换自定义模型时不用动它。</p>
+ * 那层不依赖模型变形，对任何模型通用。</p>
  */
-public class WaterCreeperRenderer extends MobRenderer<WaterCreeperEntity, DolphinModel<WaterCreeperEntity>> {
+public class WaterCreeperRenderer extends MobRenderer<WaterCreeperEntity, WaterCreeperModel> {
 
-    /** 临时借用原版海豚贴图。换自定义模型时连同这一行一起改。 */
+    /** 本模组自绘的水下苦力怕贴图（64×64，来自 creeperdolphin.png）。 */
     private static final ResourceLocation TEXTURE =
-            ResourceLocation.withDefaultNamespace("textures/entity/dolphin.png");
+            ResourceLocation.fromNamespaceAndPath(HybridCreeper.MODID, "textures/entity/water_creeper.png");
 
     public WaterCreeperRenderer(EntityRendererProvider.Context context) {
         // 阴影半径 0.6 —— 与海豚一致（命中箱尺寸也跟海豚走，见 ModEntities）
-        super(context, new DolphinModel<>(context.bakeLayer(ModelLayers.DOLPHIN)), 0.6F);
+        super(context, new WaterCreeperModel(context.bakeLayer(WaterCreeperModel.LAYER)), 0.6F);
 
-        // 被闪电劈中后的蓝色能量外衣。这层对模型没有任何要求，
-        // 所以以后把海豚模型换成自定义的，这一行也不用改。
+        // 被闪电劈中后的蓝色能量外衣。这层对模型没有任何要求。
         this.addLayer(new PoweredOverlayLayer<>(this));
     }
 

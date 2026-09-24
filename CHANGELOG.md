@@ -8,6 +8,24 @@
 
 ---
 
+## [1.4.0] — 2026-09-24
+
+### 变更
+
+- **水下苦力怕换上专属模型与贴图**：不再是"借用原版海豚模型 + 海豚贴图"，
+  改为自绘的 **海豚身体 + 苦力怕躯干 / 头 / 四条腿** 混合模型
+  （Blockbench 工程 `creeperdolphin.bbmodel`，配套 64×64 专属贴图
+  `textures/entity/water_creeper.png`）。
+  - 模型几何由工具 `gen_water_creeper_model.py` 反向换算生成，
+    并对每个立方体做了世界 AABB 交叉验证（最大偏差 ~1e-15）；
+  - 水中动画沿用原版海豚：身体俯仰/偏航跟随朝向，游动时叠加摆尾振荡，
+    四条腿随游动轻轻划水；
+  - 模型图层走本模组私有命名空间（`hybridcreeper:water_creeper`），
+    **原版海豚完全不受影响**；
+  - 引信膨胀、闪白、闪电充能能量层的逻辑一概不变。
+
+---
+
 ## [1.3.1] — 2026-09-23
 
 ### 修复
@@ -144,6 +162,7 @@
 
 ---
 
+[1.4.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.4.0
 [1.3.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.1
 [1.3.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.3.0
 [1.2.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.2.0
