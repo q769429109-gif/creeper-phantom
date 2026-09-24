@@ -182,12 +182,20 @@ public class HybridCreeper {
      *
      * <p>也<b>没有</b>照抄 {@code WaterAnimal::checkSurfaceWaterAnimalSpawnRules} ——
      * 它把生成点卡在海平面往下 13 格以内（"表层水生生物"），深水区就刷不到了。</p>
+     *
+     * <p>最后，这里还挂着配置里的自然生成总开关
+     * （{@code waterCreeper.naturalSpawn}）—— 与苦力怕幻翼的
+     * {@code [spawn] naturalSpawn} 是同一套语义。</p>
      */
     private static boolean checkWaterCreeperSpawnRules(EntityType<WaterCreeperEntity> type,
                                                       LevelAccessor level,
                                                       MobSpawnType spawnType,
                                                       BlockPos pos,
                                                       RandomSource random) {
+        // 关掉后它不会自己刷出来，但仍然能用 /summon 或刷怪蛋生成
+        if (!HybridCreeperConfig.WATER_CREEPER_NATURAL_SPAWN.get()) {
+            return false;
+        }
         if (!(level instanceof ServerLevelAccessor serverLevel)) {
             return false;
         }

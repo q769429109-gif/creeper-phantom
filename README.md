@@ -154,6 +154,11 @@
 | 压根不想让它自然刷出来 | `naturalSpawn = false` |
 | 想让它更容易出现 | `minTicksSinceRest = 24000`（3 个游戏日 → 1 个） |
 | 看不出到底有没有触发 | `debugLog = true`，日志里会打坐标 |
+| **海豚别自爆，只撞船** | `[waterCreeper] explode = false` |
+| **海豚在水里太快 / 太慢** | `[waterCreeper.attributes] swimSpeed`（默认 7.5） |
+| **海豚别跳上岸扑人** | `[waterCreeper.ai] beachAssault = false` |
+| **给海豚更多逃跑时间** | `[waterCreeper.explosion] fuseTicks = 60`（3 秒） |
+| **一只海豚都别刷** | `[waterCreeper] naturalSpawn = false` |
 
 ### 全部选项
 
@@ -191,12 +196,50 @@
 
 [debug]
     debugLog = false
+
+[waterCreeper]
+    # 是否自爆。false = 只撞船与近战撕咬，不再引爆自己。
+    explode = true
+    # 是否参与自然生成。false = 只能靠指令或刷怪蛋。
+    naturalSpawn = true
+
+    [waterCreeper.attributes]
+        maxHealth = 20.0             # 最大生命
+        attackDamage = 4.0           # 撞击伤害（爆炸另算）
+        movementSpeed = 1.5          # 陆地上（含上岸突袭）的移速
+        swimSpeed = 7.5              # 水中的速度倍率（水里速度 = 0.02 × 本值）
+        followRange = 32.0           # 主动索敌距离
+        knockbackResistance = 0.3    # 抗击退
+
+    [waterCreeper.explosion]
+        explosionPower = 3.0         # 爆炸威力（= 半径）
+        destroyBlocks = true         # 是否破坏方块
+        setFire = false              # 是否引燃
+        damageMultiplier = 1.0       # 爆炸伤害倍率
+        fuseTicks = 30               # 引信长度（20 tick = 1 秒）
+        chargedMultiplier = 2.0      # 被闪电充能后的半径倍率
+
+    [waterCreeper.ai]
+        swellRange = 3.0             # 贴到几格内开始点燃引信
+        beachAssault = true          # 是否允许跳出水面扑上岸
+
+    [waterCreeper.ram]
+        cooldownTicks = 16           # 两次撞船之间的最小间隔
 ```
 
-> ### ⚠️ 上面的配置项只作用于苦力怕幻翼
+> ### 两只生物的参数是**分开**的
 >
-> **苦力怕海豚目前不读配置文件** —— 它的爆炸半径（3）和引信长度（1.5 秒）是写死的，
-> 改这里的任何一项都不会影响它。
+> - `[general]` / `[explosion]` / `[damage]` / `[spawn]` 那几段**只作用于苦力怕幻翼**。
+> - **苦力怕海豚的全部参数在 `[waterCreeper]` 段**（共 17 项，见上）。
+>
+> ⚠️ 配置里的数值是在生物**生成时**写进它的属性与实体 NBT 的
+> （与苦力怕一样，`Fuse` / `ExplosionRadius` 都存在 NBT 里）。所以：
+> **改完配置后新刷出的生物立刻生效**；已经存在于世界里的旧生物保留它们自己的数值，
+> 等它们消失或重新刷出后生效。想单独改某一只：
+> `/data merge entity <目标> {Fuse:60,ExplosionRadius:5}`。
+>
+> 💡 想确认配置到底有没有生效：`[debug] debugLog = true` 后，
+> 用 `/summon hybridcreeper:water_creeper ~ ~ ~` 刷一只新的来看。
 
 ---
 

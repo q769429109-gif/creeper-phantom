@@ -3,6 +3,8 @@ package com.hybridcreeper.entity;
 import com.hybridcreeper.ai.WaterCreeperBeachAssaultGoal;
 import com.hybridcreeper.ai.WaterCreeperSwellGoal;
 import com.hybridcreeper.ai.WaterCreeperChaseGoal;
+import com.hybridcreeper.config.HybridCreeperConfig;
+import com.hybridcreeper.explosion.HybridCreeperExplosionCalculator;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -106,11 +108,21 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
     private int oldSwell;
     private int swell;
 
-    /** 引信长度。原版苦力怕 = 30 tick（1.5 秒）。 */
-    private int maxSwell = 30;
+    /**
+     * 引信长度。原版苦力怕 = 30 tick（1.5 秒）。
+     *
+     * <p>默认值来自配置 {@code waterCreeper.explosion.fuseTicks}，在构造时写入；
+     * 之后的读档（NBT {@code Fuse}）可以按只覆盖它 —— 与苦力怕的存档格式保持一致。</p>
+     */
+    private int maxSwell;
 
-    /** 爆炸半径。原版苦力怕 = 3。 */
-    private int explosionRadius = 3;
+    /**
+     * 爆炸半径。原版苦力怕 = 3。
+     *
+     * <p>默认值来自配置 {@code waterCreeper.explosion.explosionPower}，在构造时写入；
+     * 之后的读档（NBT {@code ExplosionRadius}）可以按只覆盖它。</p>
+     */
+    private int explosionRadius;
 
     /** 撞船冷却。防止一帧内把船和玩家连撞十几次。 */
     private int ramCooldown;
@@ -118,6 +130,11 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
     public WaterCreeperEntity(EntityType<? extends WaterCreeperEntity> type, Level level) {
         super(type, level);
         this.xpReward = 5;
+
+        // 引信与爆炸半径的默认值都来自配置 —— 这样改配置不需要改代码。
+        // （存档里的旧个体会用自己的 NBT 值覆盖，见两个字段的注释。）
+        this.maxSwell = HybridCreeperConfig.WATER_CREEPER_FUSE_TICKS.get();
+        this.explosionRadius = (int) Math.round(HybridCreeperConfig.WATER_CREEPER_EXPLOSION_POWER.get());
 
         // 移动与视线：直接采用原版海豚那一套参数（85 / 10 是转向上限，
         // 0.02F 是水中加速度，0.1F 是出水后的加速度，最后一项开启重力辅助）。
@@ -167,35 +184,55 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
     /**
      * 属性表。
      *
+     * <p><b>全部数值来自配置文件</b> {@code config/hybridcreeper-common.toml} 的
+     * {@code [waterCreeper.attributes]} 段，这里只负责把它们装进属性构建器。
+     * 默认值与原版手感对齐：</p>
+     *
      * <table border="1">
-     *   <tr><th>属性</th><th>值</th><th>参照</th></tr>
-     *   <tr><td>MAX_HEALTH</td><td>20</td><td>与苦力怕一致</td></tr>
-     *   <tr><td>MOVEMENT_SPEED</td><td><b>1.5</b></td>
-     *       <td>海豚 1.2、玩家疾跑 0.13、僵尸 0.23。比船的最大速度还快，这就是"绝对速度优势"</td></tr>
-     *   <tr><td>ATTACK_DAMAGE</td><td>4</td><td>撞击伤害（爆炸另算）</td></tr>
-     *   <tr><td>FOLLOW_RANGE</td><td>32</td><td>主动索敌距离</td></tr>
-     *   <tr><td>KNOCKBACK_RESISTANCE</td><td>0.3</td><td>免得被自己的爆炸掀得满海乱飞</td></tr>
+     *   <tr><th>属性</th><th>默认</th><th>配置项</th><th>参照</th></tr>
+     *   <tr><td>MAX_HEALTH</td><td>20</td><td>{@code maxHealth}</td><td>与苦力怕一致</td></tr>
+     *   <tr><td>MOVEMENT_SPEED</td><td><b>1.5</b></td><td>{@code movementSpeed}</td>
+     *       <td>海豚 1.2、玩家疾跑 0.13、僵尸 0.23。<b>管陆地</b>（含上岸突袭）</td></tr>
+     *   <tr><td>ATTACK_DAMAGE</td><td>4</td><td>{@code attackDamage}</td><td>撞击伤害（爆炸另算）</td></tr>
+     *   <tr><td>FOLLOW_RANGE</td><td>32</td><td>{@code followRange}</td><td>主动索敌距离</td></tr>
+     *   <tr><td>KNOCKBACK_RESISTANCE</td><td>0.3</td><td>{@code knockbackResistance}</td>
+     *       <td>免得被自己的爆炸掀得满海乱飞</td></tr>
      *   <tr><td>SWIM_SPEED<small>（NeoForge 扩展）</small></td><td><b>7.5</b></td>
-     *       <td>游泳速度倍率。没有它，水里速度会被锁死在硬编码的 0.02（≈1 格/秒），
-     *       这才是"在水里很慢"的真正原因。7.5 倍 ≈ 0.15 格/tick（约 3 格/秒），
-     *       即最初 15 倍的一半 —— 主人实测 15 倍"太快"，据此减半。</td></tr>
+     *       <td>{@code swimSpeed}</td>
+     *       <td><b>管水里</b>。水里速度 = 0.02 × 本值，与 MOVEMENT_SPEED 无关</td></tr>
      * </table>
+     *
+     * <p>⚠️ 注意这个方法是在 {@code EntityAttributeCreationEvent}（注册期）被调用的，
+     * 所以配置必须在那之前已经加载完 —— NeoForge 的 COMMON 配置确实早于它。</p>
      */
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
-                .add(Attributes.MAX_HEALTH, 20.0)
-                .add(Attributes.MOVEMENT_SPEED, 1.5)
-                .add(Attributes.ATTACK_DAMAGE, 4.0)
-                .add(Attributes.FOLLOW_RANGE, 32.0)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0.3)
+                .add(Attributes.MAX_HEALTH, HybridCreeperConfig.WATER_CREEPER_MAX_HEALTH.get())
+                .add(Attributes.MOVEMENT_SPEED, HybridCreeperConfig.WATER_CREEPER_MOVEMENT_SPEED.get())
+                .add(Attributes.ATTACK_DAMAGE, HybridCreeperConfig.WATER_CREEPER_ATTACK_DAMAGE.get())
+                .add(Attributes.FOLLOW_RANGE, HybridCreeperConfig.WATER_CREEPER_FOLLOW_RANGE.get())
+                .add(Attributes.KNOCKBACK_RESISTANCE, HybridCreeperConfig.WATER_CREEPER_KNOCKBACK_RESISTANCE.get())
                 // 游泳速度倍率（NeoForge 标准扩展属性，默认 1.0）。
                 // 关键：LivingEntity.travel 在水里把速度系数先锁死成硬编码的 0.02，
                 // 只有这个属性（或 WATER_MOVEMENT_EFFICIENCY）能把它放大；
                 // 否则 SmoothSwimmingMoveControl 设的速度、MOVEMENT_SPEED 全被无视，
                 // 结果就是"在水里几乎不动"。
-                // 7.5 倍 ≈ 0.15 格/tick（约 3 格/秒）—— 原为 15 倍，主人反馈"移速太快"故减半。
+                // 默认 7.5 倍 ≈ 0.15 格/tick（约 3 格/秒）—— 原为 15 倍，主人反馈"移速太快"故减半。
                 // 注意：这只影响水里；陆地/登陆突袭走的是上面的 MOVEMENT_SPEED。
-                .add(NeoForgeMod.SWIM_SPEED, 7.5);
+                .add(NeoForgeMod.SWIM_SPEED, HybridCreeperConfig.WATER_CREEPER_SWIM_SPEED.get());
+    }
+
+    /**
+     * 充能后的爆炸半径倍率 —— 改成读配置（{@code waterCreeper.explosion.chargedMultiplier}）。
+     *
+     * <p>{@link PoweredMob} 里的默认实现是返回写死的 2.0F（对齐原版苦力怕），
+     * 这里覆写它只是为了让这个数值也能被调。</p>
+     */
+    @Override
+    public float explosionRadiusMultiplier() {
+        return this.isPowered()
+                ? HybridCreeperConfig.WATER_CREEPER_CHARGED_MULTIPLIER.get().floatValue()
+                : 1.0F;
     }
 
     /* ------------------------------------------------------------------
@@ -382,20 +419,63 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
     }
 
     /**
-     * 引爆。数值与 {@code Creeper#explodeCreeper()} 完全一致：
-     * 半径 3、{@code ExplosionInteraction.MOB}（受 mobGriefing 约束）、炸完立即移除自己。
-     * <b>充能状态下半径翻倍</b>（3 → 6），倍率见 {@link PoweredMob#CHARGED_EXPLOSION_MULTIPLIER}。
+     * 引爆。
+     *
+     * <p>结构逐字对标 {@code Creeper#explodeCreeper()}：先把自己标记为 dead，
+     * 再在自身位置引发一次爆炸，最后 {@code discard()}。数值<b>全部来自配置</b>
+     * {@code [waterCreeper.explosion]}：</p>
+     * <ul>
+     *   <li>{@code explosionPower} —— 半径（默认 3，与苦力怕一致）；</li>
+     *   <li>{@code destroyBlocks} —— 决定用 {@code ExplosionInteraction.MOB}
+     *       （受 {@code mobGriefing} 约束）还是 {@code NONE}（只伤实体，地形无损）；</li>
+     *   <li>{@code setFire} —— 是否引燃；</li>
+     *   <li>{@code damageMultiplier} —— 交给
+     *       {@link HybridCreeperExplosionCalculator} 缩放伤害；</li>
+     *   <li>{@code chargedMultiplier} —— 充能（被闪电劈中）时的半径倍率，默认 2.0。</li>
+     * </ul>
+     *
+     * <p>{@code waterCreeper.explode = false} 时直接返回：既不炸也不自毁，
+     * 它退化成"只会撞船与近战撕咬"的生物（此时引信与上岸突袭也会自动停工，
+     * 见两个 goal 里的判断）。</p>
      */
     public void explode() {
         if (this.level().isClientSide) {
             return;
         }
+        if (!HybridCreeperConfig.WATER_CREEPER_EXPLODE.get()) {
+            return;
+        }
+
+        boolean destroyBlocks = HybridCreeperConfig.WATER_CREEPER_DESTROY_BLOCKS.get();
+
+        HybridCreeperExplosionCalculator calculator = new HybridCreeperExplosionCalculator(
+                destroyBlocks,
+                // 引爆即自毁，不需要"免疫自己的爆炸"
+                false,
+                this,
+                // 没有"额外照顾"的目标（苦力怕海豚没有幻翼那种"咬中谁额外罚谁"的机制）
+                null,
+                HybridCreeperConfig.WATER_CREEPER_DAMAGE_MULTIPLIER.get(),
+                1.0D);
+
+        // 破坏方块 = MOB：与苦力怕完全一致，受 mobGriefing 游戏规则约束
+        // 不破坏方块 = NONE：保留对实体的伤害与击退，但地形无损
+        Level.ExplosionInteraction interaction = destroyBlocks
+                ? Level.ExplosionInteraction.MOB
+                : Level.ExplosionInteraction.NONE;
+
         this.dead = true;
         this.level().explode(
-                this,
-                this.getX(), this.getY(), this.getZ(),
-                (float) this.explosionRadius * this.explosionRadiusMultiplier(),
-                Level.ExplosionInteraction.MOB);
+                /* source           */ this,
+                /* damageSource     */ null,        // 交回原版推导（等价于旧的 explode(this, ...) 写法）
+                /* damageCalculator */ calculator,
+                /* x, y, z          */ this.getX(), this.getY(), this.getZ(),
+                // 充能时半径翻倍。等价于 Creeper#explodeCreeper 里的
+                //   float f = this.isPowered() ? 2.0F : 1.0F;
+                //   explode(..., (float)this.explosionRadius * f, ...);
+                /* radius           */ (float) this.explosionRadius * this.explosionRadiusMultiplier(),
+                /* fire             */ HybridCreeperConfig.WATER_CREEPER_SET_FIRE.get(),
+                /* interaction      */ interaction);
         this.triggerOnDeathMobEffects(Entity.RemovalReason.KILLED);
         this.discard();
     }
@@ -409,11 +489,20 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
      *
      * @return 是否真的撞到了东西（撞到了才会进入冷却）
      */
+    /**
+     * 当前是否允许引爆 —— 供两个 AI goal 判断要不要起用。
+     *
+     * <p>配置里关掉爆炸后，引信与"跳上岸自爆"都失去意义，所以一起停工。</p>
+     */
+    public boolean isExplosionEnabled() {
+        return HybridCreeperConfig.WATER_CREEPER_EXPLODE.get();
+    }
+
     public boolean ram(Entity target) {
         if (this.ramCooldown > 0) {
             return false;
         }
-        this.ramCooldown = RAM_COOLDOWN_TICKS;
+        this.ramCooldown = HybridCreeperConfig.WATER_CREEPER_RAM_COOLDOWN_TICKS.get();
 
         // 对目标本体造成伤害（玩家在船上时，伤害算在玩家头上）
         this.doHurtTarget(target);
@@ -437,9 +526,6 @@ public class WaterCreeperEntity extends Monster implements PoweredMob {
 
         return true;
     }
-
-    /** 两次撞击之间的最小间隔（tick）。16 tick ≈ 0.8 秒，够玩家感觉到节奏但不至于连环。 */
-    public static final int RAM_COOLDOWN_TICKS = 16;
 
     /* ------------------------------------------------------------------
      * 存档

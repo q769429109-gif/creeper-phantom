@@ -1,5 +1,6 @@
 package com.hybridcreeper.ai;
 
+import com.hybridcreeper.config.HybridCreeperConfig;
 import com.hybridcreeper.entity.WaterCreeperEntity;
 import java.util.EnumSet;
 import javax.annotation.Nullable;
@@ -67,6 +68,11 @@ public class WaterCreeperBeachAssaultGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        // 配置里关掉了自爆 → 跳上岸也没意义；或者主人明确关掉了"上岸突袭"
+        if (!this.mob.isExplosionEnabled()
+                || !HybridCreeperConfig.WATER_CREEPER_BEACH_ASSAULT.get()) {
+            return false;
+        }
         LivingEntity living = this.mob.getTarget();
         if (living == null || !living.isAlive()) {
             return false;
