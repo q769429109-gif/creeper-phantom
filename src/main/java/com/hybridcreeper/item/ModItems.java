@@ -79,7 +79,7 @@ public final class ModItems {
                     new Item.Properties());
 
     /* ==================================================================
-     * 水下苦力怕刷怪蛋
+     * 苦力怕海豚刷怪蛋
      * ================================================================== */
 
     /**
@@ -96,7 +96,7 @@ public final class ModItems {
      */
     public static final int WATER_CREEPER_EGG_HIGHLIGHT = 0x3F76E4;
 
-    /** 水下苦力怕刷怪蛋。 */
+    /** 苦力怕海豚刷怪蛋。 */
     public static final DeferredItem<SpawnEggItem> WATER_CREEPER_SPAWN_EGG =
             ITEMS.registerItem("water_creeper_spawn_egg",
                     props -> new DeferredSpawnEggItem(

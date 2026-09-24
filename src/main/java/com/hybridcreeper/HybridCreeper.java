@@ -67,7 +67,7 @@ public class HybridCreeper {
         // 把刷怪蛋放进创造模式的「刷怪蛋」标签页。
         modEventBus.addListener(HybridCreeper::onBuildCreativeTabContents);
 
-        // 水下苦力怕的生成位置规则（水中 + 阴暗环境）。
+        // 苦力怕海豚的生成位置规则（水中 + 阴暗环境）。
         modEventBus.addListener(HybridCreeper::onRegisterSpawnPlacements);
 
         // NeoForge 1.21.1 中 ModLoadingContext 已不再提供 registerConfig，
@@ -118,7 +118,7 @@ public class HybridCreeper {
     }
 
     /**
-     * 注册水下苦力怕的生成位置规则。
+     * 注册苦力怕海豚的生成位置规则。
      *
      * <p>三个要素，缺一不可：</p>
      * <ol>
@@ -144,7 +144,7 @@ public class HybridCreeper {
     }
 
     /**
-     * 水下苦力怕能否在这个位置生成。
+     * 苦力怕海豚能否在这个位置生成。
      *
      * <p>前两条逐字对标 {@code Monster#checkMonsterSpawnRules}，实现需求里
      * <b>「与普通苦力怕相似，在夜晚或阴暗的环境中生成」</b>：</p>

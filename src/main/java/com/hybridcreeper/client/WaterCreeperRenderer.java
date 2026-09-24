@@ -10,7 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
 /**
- * 水下苦力怕的渲染器 —— 使用自定义模型
+ * 苦力怕海豚的渲染器 —— 使用自定义模型
  * {@link WaterCreeperModel}（海豚身体 + 苦力怕躯干 / 头 / 四条腿）。
  *
  * <h2>模型与贴图</h2>
@@ -46,7 +46,7 @@ import net.minecraft.util.Mth;
  */
 public class WaterCreeperRenderer extends MobRenderer<WaterCreeperEntity, WaterCreeperModel> {
 
-    /** 本模组自绘的水下苦力怕贴图（64×64，来自 creeperdolphin.png）。 */
+    /** 本模组自绘的苦力怕海豚贴图（64×64，来自 creeperdolphin.png）。 */
     private static final ResourceLocation TEXTURE =
             ResourceLocation.fromNamespaceAndPath(HybridCreeper.MODID, "textures/entity/water_creeper.png");
 

@@ -7,7 +7,7 @@ modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
-description = '''新增两只爆炸系敌对生物：苦力怕幻翼（俯冲击中玩家即在命中点引爆苦力怕级爆炸）与水下苦力怕（高速撞船、贴身自爆、上岸突袭）。两只都能像原版苦力怕一样被闪电充能，威力翻倍。'''
+description = '''新增两只爆炸系敌对生物：苦力怕幻翼（俯冲击中玩家即在命中点引爆苦力怕级爆炸）与苦力怕海豚（高速撞船、贴身自爆、上岸突袭）。两只都能像原版苦力怕一样被闪电充能，威力翻倍。'''
 
 [[dependencies.${mod_id}]]
 modId = "neoforge"

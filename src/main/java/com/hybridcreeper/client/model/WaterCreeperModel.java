@@ -15,7 +15,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
 /**
- * 水下苦力怕的自定义模型：「海豚的身体 + 苦力怕的躯干 / 头 / 四条腿」。
+ * 苦力怕海豚的自定义模型：「海豚的身体 + 苦力怕的躯干 / 头 / 四条腿」。
  *
  * <p><b>本文件由工具自动生成</b>（{@code vanilla-reference/tools/gen_water_creeper_model.py}），
  * 源工程是 Blockbench 文件 {@code creeperdolphin.bbmodel}（64×64 贴图）。

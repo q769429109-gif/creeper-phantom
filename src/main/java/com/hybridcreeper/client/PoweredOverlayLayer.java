@@ -37,12 +37,12 @@ import net.neoforged.api.distmarker.OnlyIn;
  * <ul>
  *   <li>{@code CreeperModel} 有 —— {@code createBodyLayer(CubeDeformation)}；</li>
  *   <li>{@code DolphinModel} <b>没有</b> —— 它的签名是 {@code createBodyLayer()}，不收参数。
- *       水下苦力怕正好用的是海豚模型，这条路直接堵死。</li>
+ *       苦力怕海豚正好用的是海豚模型，这条路直接堵死。</li>
  * </ul>
  *
  * <p>所以这里改成<b>重绘父模型本身</b>，用 {@code PoseStack.scale} 把它整体撑大一点点
  * 来代替逐立方体的变形。效果等价（都是"往外挪一点避免共面"），
- * 而且对任何模型都通用 —— 将来水下苦力怕换成自定义模型也不用改这里。</p>
+ * 而且对任何模型都通用 —— 将来苦力怕海豚换成自定义模型也不用改这里。</p>
  *
  * <h2>关于那点缩放偏移</h2>
  * <p>整体缩放是以实体脚下为原点放大的，所以模型顶部会比本体高出约

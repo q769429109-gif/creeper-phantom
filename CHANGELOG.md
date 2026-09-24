@@ -8,6 +8,20 @@
 
 ---
 
+## [1.6.0] — 2026-09-24
+
+### 变更
+
+- **生物改名**：「水下苦力怕 / Water Creeper」→ **「苦力怕海豚 / Creeper Dolphin」**。
+  只改**显示名**（语言文件 + 文档 + 代码注释）——
+  实体注册 id `hybridcreeper:water_creeper` **保持不变**，
+  所以已有存档、`/summon` 指令、刷怪蛋都不受影响。
+- **游动速度减半**：`SWIM_SPEED` **15 → 7.5**（`0.02 × 7.5 = 0.15 格/tick ≈ 3 格/秒`）。
+  实测 15 倍"移速太快"。只影响**水里**；陆地/上岸突袭走的仍是 `MOVEMENT_SPEED`（1.5，未动）。
+- README 同步：原名与"模型暂时借用原版海豚"等过时描述一并订正。
+
+---
+
 ## [1.5.2] — 2026-09-24
 
 ### 修复
@@ -222,6 +236,7 @@
 
 ---
 
+[1.6.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.6.0
 [1.5.2]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.2
 [1.5.1]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.1
 [1.5.0]: https://github.com/q769429109-gif/creeper-phantom/releases/tag/v1.5.0
